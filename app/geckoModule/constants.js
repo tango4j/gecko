@@ -13,7 +13,7 @@ export const PLAYBACK_SPEED = [
 ];
 
 export const SPEAKER_COLORS = [
-    "#a94dec",
+    "#76B900",
     "#54F2D9",
     "#fbeb9b",
     "#f58230",
@@ -51,15 +51,15 @@ export const NO_CONFIDENCE = -1;
 export const UNKNOWN_SPEAKER_COLOR = '#808080';
 
 const speakers = [
-    { display: '[noise]', value: '[noise]', shortcut: 1, color: '#e1c7ff'},
-    { display: '[crosstalk]', value: '[crosstalk]', shortcut: 2, color: '#e1c7ff'},
-    { display: '[laughter]', value: '[laughter]', shortcut: 3, color: '#e1c7ff'},
-    { display: '[music]', value: '[music]', shortcut: 4, color: '#e1c7ff'},
-    { display: '[dialtone]', value: '[dialtone]', shortcut: 5, color: '#e1c7ff'},
-//    { display: '[bubble]', value: '[bubble]', shortcut: 6, color: '#e1c7ff'},
-//    { display: '[recording]', value: '[recording]', shortcut: 7, color: '#e1c7ff'},
-//    { display: '[foreign]', value: '[foreign]', shortcut: 8, color: '#e1c7ff'},
-//    { display: '[beep]', value: '[beep]', shortcut: 9, color: '#e1c7ff'}
+    { display: '[noise]', value: '[noise]', shortcut: 1, color: '#d1eaa3'},
+    { display: '[crosstalk]', value: '[crosstalk]', shortcut: 2, color: '#d1eaa3'},
+    { display: '[laughter]', value: '[laughter]', shortcut: 3, color: '#d1eaa3'},
+    { display: '[music]', value: '[music]', shortcut: 4, color: '#d1eaa3'},
+    { display: '[dialtone]', value: '[dialtone]', shortcut: 5, color: '#d1eaa3'},
+//    { display: '[bubble]', value: '[bubble]', shortcut: 6, color: '#d1eaa3'},
+//    { display: '[recording]', value: '[recording]', shortcut: 7, color: '#d1eaa3'},
+//    { display: '[foreign]', value: '[foreign]', shortcut: 8, color: '#d1eaa3'},
+//    { display: '[beep]', value: '[beep]', shortcut: 9, color: '#d1eaa3'}
 ]
 
 export const defaultSpeakers = speakers;
