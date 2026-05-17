@@ -117,7 +117,7 @@ export const DEFAULT_USER_CONFIG = {
     showTranscriptFiles: {},
     showVideo: true
 }
-export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv']
+export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv', 'seglst']
 
 export const TIME_OFFSET = 0.0001
 

@@ -1694,8 +1694,17 @@ class MainController {
         for (var i = 0; i < this.filesData.length; i++) {
             var current = this.filesData[i];
             if (current.data) {
-                // convert the filename to "rttm" extension
-                var filename = current.filename.substr(0, current.filename.lastIndexOf('.')) + '.' + extension;
+                // Strip any known transcript extension (including the SegLST
+                // compound extension `.seglst.json`) before re-attaching the
+                // target one.
+                var stripped = current.filename.replace(
+                    /\.(seglst\.json|seglst|json|rttm|ctm|srt|tsv)$/i,
+                    ''
+                );
+                if (stripped === current.filename) {
+                    stripped = current.filename.substr(0, current.filename.lastIndexOf('.'))
+                }
+                var filename = stripped + '.' + extension;
 
                 if (!this.checkValidRegions(i)) return;
 
