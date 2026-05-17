@@ -1,18 +1,29 @@
 # Installation & Deployment
 
-> ## ⚠️ DEPRECATION NOTICE
-> **This project is DEPRECATED and no longer maintained.** The installation instructions below are preserved for historical reference only. Do NOT use this project for new development. See [README.md](README.md) for full deprecation details.
+> This is the installation guide for the [`tango4j/gecko`](https://github.com/tango4j/gecko) fork. A live build is hosted at <https://tango4j.github.io/gecko/> — you only need to install locally if you want to develop against the codebase or run Gecko in server mode (S3 integration, etc.).
 
 ## Requirements
 
-* node >= v10
-* npm  >= v6
+* Node.js ≥ 18 LTS (tested on Node 20)
+* npm ≥ 9
+
+The previous upstream targeted Node 10 / npm 6; the dependency refresh in this fork (Webpack 5, modern loaders, `Intl.Segmenter`-based tokenization) requires a current LTS Node.
 
 ## Usage
 
-1. Install packages with: `npm install`
+1. Install packages: `npm install`
+2. Run the dev server: `npm run dev` — then open <http://localhost:8080>.
+3. Production build: `npm run build` — outputs to `./build/`.
 
-2. Run with: `npm run dev`
+### Loading transcripts via URL
+
+You can pre-populate Gecko by passing transcript files as query params, including the new SegLST format:
+
+```
+http://localhost:8080/?audio=path/to/file.wav&json=path/to/file.seglst.json
+```
+
+The `json=` param accepts any of `.json`, `.seglst`, `.seglst.json`, `.rttm`, `.ctm`, `.srt`, or `.tsv` — Gecko will auto-detect SegLST payloads by their shape (`session_id` / `words` / `start_time` / `end_time` / `speaker`).
 
 ## Configuration
 
@@ -84,4 +95,13 @@ Run `index.html`
 
 `npm run server`
 
-Annotator can now access the server remotly, and can use S3 integration if configured.
+Annotator can now access the server remotely, and can use S3 integration if configured.
+
+### GitHub Pages (this fork)
+
+The fork is auto-deployed to <https://tango4j.github.io/gecko/> via the [`gh-pages.yml`](.github/workflows/gh-pages.yml) workflow on every push to `master` or `mod_v1`. To deploy to your own GitHub Pages site:
+
+1. Fork the repo.
+2. Update the `homepage` field in `package.json` to `https://<your-user>.github.io/gecko/`.
+3. In repo Settings → Pages, set the source to **GitHub Actions**.
+4. Push to `master`; the workflow will build with `npm run build` and publish `./build/` to Pages.
