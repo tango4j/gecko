@@ -19,11 +19,10 @@
 
 # Gecko - A Tool for Effective Annotation of Human Conversations
 
-![Comparison](./docs/Comparison.png)
+![Gecko (tango4j fork)](./docs/gecko_black.png)
 
- Gecko allows efficient and effective segmentation of the voice signal by speaker as well as annotation of the linguistic content of the conversation. A key feature of Gecko is the presentation of the output of automatic segmentation and transcription systems in an intuitive user interface for editing. Gecko allows annotation of Voice Activity Detection (VAD), Diarization, Speaker Identiﬁcation and ASR outputs on a large scale, and leads to faster and more accurate annotated datasets.
+Gecko allows efficient and effective segmentation of the voice signal by speaker as well as annotation of the linguistic content of the conversation. A key feature of Gecko is the presentation of the output of automatic segmentation and transcription systems in an intuitive user interface for editing — VAD, diarization, speaker identification, and ASR outputs can all be annotated at scale, leading to faster and more accurate datasets.
 
- Gecko was originally introduced in [this Medium post](https://medium.com/gong-tech-blog/introducing-gecko-an-open-source-solution-for-effective-annotation-of-conversations-2ecec0909941).
 For an overview of the main features, see this [video](https://youtu.be/CBYA0YC1NBI) and the corresponding [paper](./docs/gecko_interspeech_2019_paper.pdf). \
 You can try this fork on the live working platform at **<https://tango4j.github.io/gecko/>**.
 
@@ -37,8 +36,6 @@ You can try this fork on the live working platform at **<https://tango4j.github.
 * No server side is needed — easy installation.
 * Supports RTTM, CTM, JSON, CSV, SRT, TSV, and **SegLST** formats.
 * Increased productivity using keyboard shortcuts.
-
-![Poster](./docs/Poster_interspeech2019.jpg)
 
 ## Technological Stack
 
