@@ -2,6 +2,7 @@ import angular from 'angular'
 import 'video.js/dist/video-js.min.css'
 import 'angularjs-toaster/toaster.min.css'
 
+import 'bootstrap3/dist/css/bootstrap.min.css'
 import '../static/css/bootstrap.min.theme_paper.css'
 import '../static/css/app.css'
 import '../static/js/bootstrap.min.js'
