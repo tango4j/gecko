@@ -1,8 +1,9 @@
-name: Deploy mod_v1 to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches:
+      - master
       - mod_v1
     paths-ignore:
       - 'build/**'
@@ -15,7 +16,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-mod-v1
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
