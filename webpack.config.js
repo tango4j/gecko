@@ -74,31 +74,19 @@ module.exports = {
                 //loader: "imports-loader?this=>window"
             },
             {
-                test: /\.woff2?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
-                use: 'url-loader?limit=10000',
+                test: /\.(woff|woff2)(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+                type: 'asset/resource',
             },
             {
                 test: /\.(ttf|eot|svg)(\?[\s\S]+)?$/,
-                use: [
-                    {
-                        loader: 'file-loader',
-                        options: {
-                            esModule: false,
-                        },
-                    }
-                ]
-
+                type: 'asset/resource',
             },
             {
                 test: /\.(jpe?g|png|gif)$/i,
-                use: [
-                    {
-                        loader: 'file-loader?name=images/[name].[ext]',
-                        options: {
-                            esModule: false,
-                        },
-                    },
-                ]
+                type: 'asset/resource',
+                generator: {
+                    filename: 'images/[name][ext]',
+                },
             },
             {
                 test: /\.ctm$/i,
