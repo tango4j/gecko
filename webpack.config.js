@@ -10,7 +10,8 @@ module.exports = {
     entry: "./app/app.js",
     output: {
         path: path.resolve(__dirname, 'build'),
-        filename: "gecko.js"
+        filename: "gecko.[contenthash].js",
+        clean: true
     },
     resolve: {
         alias: {
@@ -107,7 +108,7 @@ module.exports = {
     },
     plugins: [
         new MiniCssExtractPlugin({
-            filename: 'gecko.css'
+            filename: 'gecko.[contenthash].css'
         }),
         new HtmlWebpackPlugin({
             filename: 'index.html',
