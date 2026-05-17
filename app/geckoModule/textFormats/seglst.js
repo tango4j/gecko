@@ -39,19 +39,31 @@ export const isSegLstFilename = (filename) => {
     return lower.endsWith('.seglst.json') || lower.endsWith('.seglst')
 }
 
-const splitWordsEvenly = (text, start, end) => {
+// Estimate per-word timings from a segment-level transcript by distributing
+// the segment's [start, end] span across words proportionally to each word's
+// alphanumeric-character count. Punctuation is excluded from the weight so
+// it doesn't inflate a word's duration. This is a UI affordance only —
+// SegLST itself carries no word-level timing — so saving back to SegLST
+// drops these estimates and re-emits the original segment span.
+const splitWordsByCharWeight = (text, start, end) => {
     const tokens = (text || '').trim().split(/\s+/).filter(Boolean)
     if (tokens.length === 0) {
         return [{ start, end, text: '', confidence: 1 }]
     }
+    const weight = (t) => Math.max(1, t.replace(/[^\p{L}\p{N}]/gu, '').length)
+    const totalWeight = tokens.reduce((s, t) => s + weight(t), 0)
     const span = Math.max(0, end - start)
-    const slice = span / tokens.length
-    return tokens.map((tok, i) => ({
-        start: start + i * slice,
-        end: start + (i + 1) * slice,
-        text: tok,
-        confidence: 1
-    }))
+    let cursor = start
+    const out = tokens.map((tok) => {
+        const dur = (weight(tok) / totalWeight) * span
+        const w = { start: cursor, end: cursor + dur, text: tok, confidence: 1 }
+        cursor += dur
+        return w
+    })
+    // Snap the final word's end to `end` so float accumulation never drifts
+    // outside the original segment boundary.
+    out[out.length - 1].end = end
+    return out
 }
 
 export const parse = (data, $parent) => {
@@ -67,7 +79,7 @@ export const parse = (data, $parent) => {
         const start = NUM(entry.start_time)
         const end = NUM(entry.end_time)
         const speakerId = entry.speaker || ''
-        const words = splitWordsEvenly(entry.words, start, end)
+        const words = splitWordsByCharWeight(entry.words, start, end)
 
         return {
             speaker: { id: speakerId },
