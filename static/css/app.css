@@ -1192,3 +1192,50 @@ body.gk-resizing * {
     outline-offset: 0;
     box-shadow: 0 0 0 3px var(--glow), 0 3px 12px rgba(0, 0, 0, 0.6);
 }
+
+/* speaker labels are clickable: they select the whole speaker */
+.gk-lane-label {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.gk-lane-label:hover {
+    color: #fff;
+}
+
+/* a whole speaker selected (Delete / trash removes all its boxes) */
+.gk-lane.row-selected {
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--lane) 70%, white), color-mix(in srgb, var(--lane-edge) 75%, white));
+    box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 14px rgba(255, 255, 255, 0.25);
+}
+
+.gk-lane-label.row-selected {
+    color: #111;
+    background: #ffffff;
+}
+
+/* "+ Speaker" in the Words header */
+.gk-add-speaker {
+    margin-left: auto;
+    flex: none;
+    padding: 0 8px;
+    font-size: 10px;
+    line-height: 15px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #e6ebf1;
+    background: linear-gradient(#3a414b, #2b3038);
+    border: 1px solid #4b535e;
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.gk-add-speaker:hover {
+    background: linear-gradient(#4a5360, #353c46);
+    border-color: #6b7582;
+}
+
+.gk-add-speaker .glyphicon {
+    font-size: 9px;
+}

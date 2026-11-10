@@ -3,7 +3,7 @@ import Swal from 'sweetalert2'
 import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
 import { markTracksDirty } from './utils/speakerTracks.js'
 import { insertAndEdit } from './utils/trackLanes.js'
-import { deleteSelection } from './utils/laneEdits.js'
+import { deleteSelection, addSpeaker } from './utils/laneEdits.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -2434,6 +2434,12 @@ class MainController {
         if (!this.laneSelection) return
         deleteSelection(this)
         this.tracksDirty = true
+    }
+
+    // "+ Speaker": a new empty speaker row in the word and RTTM lanes.
+    laneAddSpeaker () {
+        if (!this.ready) return
+        addSpeaker(this)
     }
 
     // Insert button: a 0.5 s word box + RTTM box at the cursor for the

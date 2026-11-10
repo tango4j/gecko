@@ -51,12 +51,12 @@ const els = () => ({
     diar: document.querySelector('#gecko-diar-track .gecko-track-body')
 })
 
-const laneScaffold = (speakers, colors, laneH, selected) => speakers.map((s, i) =>
-    `<div class="gk-lane${s === selected ? ' selected' : ''}" style="top:${i * laneH}px;height:${laneH}px;${shadeVars(colors[s])}"></div>`
+const laneScaffold = (speakers, colors, laneH, selected, rowSel) => speakers.map((s, i) =>
+    `<div class="gk-lane${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" style="top:${i * laneH}px;height:${laneH}px;${shadeVars(colors[s])}"></div>`
 ).join('')
 
-const laneLabels = (speakers, colors, laneH, selected) => speakers.map((s, i) =>
-    `<div class="gk-lane-label${s === selected ? ' selected' : ''}" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
+const laneLabels = (speakers, colors, laneH, selected, rowSel) => speakers.map((s, i) =>
+    `<div class="gk-lane-label${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" data-speaker="${esc(s)}" title="Click to select ${esc(s)} (Delete removes the whole speaker)" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
 ).join('')
 
 // ---------------------------------------------------------------- selection
@@ -123,9 +123,10 @@ export const renderTrackLanes = (context, force = false) => {
     context.laneWords = visibleWords
     word.style.height = `${Math.max(tracks.speakers.length, 1) * wordH}px`
     const selected = currentLaneSpeaker(context)
-    word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH, selected) +
+    const rowSel = context.laneSelection && context.laneSelection.kind === 'speaker' ? context.laneSelection.speaker : null
+    word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
         `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
-        laneLabels(tracks.speakers, tracks.colors, wordH, selected) +
+        laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'
 
     // ---- RTTM / diarization lane ----
@@ -144,9 +145,9 @@ export const renderTrackLanes = (context, force = false) => {
     context.laneSegs = visibleSegs
     diar.classList.toggle('editable', !!tracks.diarEditable)
     diar.style.height = `${Math.max(tracks.speakers.length, 1) * diarH}px`
-    diar.innerHTML = laneScaffold(tracks.speakers, tracks.colors, diarH, selected) +
+    diar.innerHTML = laneScaffold(tracks.speakers, tracks.colors, diarH, selected, rowSel) +
         `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${segs}</div>` +
-        laneLabels(tracks.speakers, tracks.colors, diarH, selected) +
+        laneLabels(tracks.speakers, tracks.colors, diarH, selected, rowSel) +
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'
 
     const wordTitle = document.querySelector('#gecko-word-track .gecko-track-source')
@@ -378,14 +379,22 @@ export const initTrackLanes = (context) => {
     word.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return
         const laneH = wordLaneHeight(context)
-        selectLane(context, laneAtClientY(context, word, e.clientY, laneH))
+        const rowSpeaker = laneAtClientY(context, word, e.clientY, laneH)
+        selectLane(context, rowSpeaker)
+        const label = e.target.closest('.gk-lane-label')
+        if (label) {
+            // speaker name on the far left: select the whole speaker
+            e.preventDefault()
+            setLaneSelection(context, { kind: 'speaker', speaker: label.dataset.speaker })
+            return
+        }
         const box = e.target.closest('.gk-word')
         const entry = box && context.laneWords[+box.dataset.k]
         if (!entry) {
+            // silence in a speaker's row: move the cursor and select that speaker
             const t = timeAtClientX(context, e.clientX, word)
             if (t !== null) context.seek(t)
-            if (context.laneSelection) setLaneSelection(context, null)
-            context.$scope.$evalAsync()
+            setLaneSelection(context, rowSpeaker ? { kind: 'speaker', speaker: rowSpeaker } : null)
             return
         }
         e.preventDefault()
@@ -400,7 +409,14 @@ export const initTrackLanes = (context) => {
     diar.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return
         const laneH = diarLaneHeight(context)
-        selectLane(context, laneAtClientY(context, diar, e.clientY, laneH))
+        const rowSpeaker = laneAtClientY(context, diar, e.clientY, laneH)
+        selectLane(context, rowSpeaker)
+        const label = e.target.closest('.gk-lane-label')
+        if (label) {
+            e.preventDefault()
+            setLaneSelection(context, { kind: 'speaker', speaker: label.dataset.speaker })
+            return
+        }
         const box = e.target.closest('.gk-seg')
         const seg = box && context.laneSegs[+box.dataset.k]
         if (seg && getTracks(context).diarEditable) {
@@ -410,8 +426,8 @@ export const initTrackLanes = (context) => {
         }
         const t = seg ? seg.start : timeAtClientX(context, e.clientX, diar)
         if (t !== null) context.seek(t)
-        if (context.laneSelection) setLaneSelection(context, null)
-        context.$scope.$evalAsync()
+        // silence in a speaker's row selects that speaker; a read-only box just seeks
+        setLaneSelection(context, !seg && rowSpeaker ? { kind: 'speaker', speaker: rowSpeaker } : null)
     })
 
     window.addEventListener('mousemove', (e) => {

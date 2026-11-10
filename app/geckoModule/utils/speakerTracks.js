@@ -5,7 +5,9 @@
 // (text panel, region drags, undo, the word lanes themselves) show up
 // everywhere. The model is rebuilt lazily when `context.tracksDirty` is set.
 
-const FALLBACK_COLORS = ['#4fc3f7', '#f48fb1', '#aed581', '#ffd54f', '#ce93d8', '#ff8a65', '#4db6ac', '#90a4ae']
+import { SPEAKER_COLORS } from '../constants'
+
+const FALLBACK_COLORS = SPEAKER_COLORS
 
 const extOf = (name) => (name || '').toLowerCase().split('?')[0].split('.').pop()
 
@@ -84,6 +86,8 @@ const buildTracks = (context) => {
     const speakerSet = new Set()
     words.forEach(x => speakerSet.add(x.speaker))
     diar.forEach(x => speakerSet.add(x.speaker))
+    // speakers added with "+ Speaker" have a row before they have any boxes
+    ;(context.extraSpeakers || []).forEach(s => speakerSet.add(s))
     const speakers = [...speakerSet].sort(speakerSort)
     const colors = {}
     speakers.forEach((s, i) => { colors[s] = speakerColor(context, s, i) })

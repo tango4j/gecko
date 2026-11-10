@@ -44,12 +44,12 @@ const speakerColor = (context, speaker) => {
 }
 
 // A speaker must exist in a file's legend before a region of that file can use it.
-const ensureLegend = (context, fileIndex, speaker) => {
+const ensureLegend = (context, fileIndex, speaker, color) => {
     const file = context.filesData[fileIndex]
     if (!file) return
     file.legend = file.legend || []
     if (!file.legend.find(l => l.value === speaker)) {
-        file.legend.push({ value: speaker, color: speakerColor(context, speaker) })
+        file.legend.push({ value: speaker, color: color || speakerColor(context, speaker) })
     }
 }
 
@@ -331,6 +331,10 @@ export const deleteSelection = (context) => {
     if (!sel) return false
     context.laneSelection = null
 
+    if (sel.kind === 'speaker') {
+        return deleteSpeaker(context, sel.speaker)
+    }
+
     if (sel.kind === 'word') {
         let region = null
         context.iterateRegions(r => {
@@ -370,4 +374,107 @@ export const deleteSelection = (context) => {
         return true
     }
     return false
+}
+
+// ------------------------------------------------------------------ speakers
+
+const nextSpeakerName = (speakers) => {
+    let n = 0
+    speakers.forEach(s => {
+        const m = /^spk(\d+)$/.exec(s)
+        if (m) n = Math.max(n, +m[1] + 1)
+    })
+    if (!n) n = speakers.length
+    while (speakers.includes(`spk${n}`)) n++
+    return `spk${n}`
+}
+
+// "+ Speaker": an empty row in both lanes, ready for boxes to be dragged or
+// inserted into it. It also joins each file's legend (Segment Labeling).
+export const addSpeaker = (context) => {
+    const speakers = getTracks(context).speakers
+    const name = nextSpeakerName(speakers)
+    const color = constants.SPEAKER_COLORS[speakers.length % constants.SPEAKER_COLORS.length]
+    context.extraSpeakers = context.extraSpeakers || []
+    context.extraSpeakers.push(name)
+    const legendAdded = []
+    ;(context.filesData || []).forEach((f, i) => {
+        if (!(f.legend || []).find(l => l.value === name)) {
+            ensureLegend(context, i, name, color)
+            legendAdded.push(i)
+        }
+    })
+    const previousTarget = context.laneSpeaker
+    context.laneSpeaker = name
+    pushUndo(context, () => {
+        context.extraSpeakers = (context.extraSpeakers || []).filter(s => s !== name)
+        legendAdded.forEach(i => {
+            const f = context.filesData[i]
+            if (f) f.legend = (f.legend || []).filter(l => l.value !== name)
+        })
+        context.laneSpeaker = previousTarget
+    })
+    changed(context, null)
+    return name
+}
+
+const recreateRegion = (context, rec) => {
+    ensureLegend(context, rec.fileIndex, rec.speaker[0])
+    return context.wavesurfer.addRegion({
+        id: rec.id,
+        start: rec.start,
+        end: rec.end,
+        data: { fileIndex: rec.fileIndex, speaker: rec.speaker, words: rec.words, initFinished: true, regionChanged: true },
+        drag: false,
+        minLength: constants.MINIMUM_LENGTH
+    })
+}
+
+// Remove a speaker everywhere: its word turns, its RTTM segments (loaded
+// .rttm regions or TextGrid diarization intervals) and its row.
+export const deleteSpeaker = (context, speaker) => {
+    const removedRegions = []     // whole regions of this speaker
+    const trimmedRegions = []     // multi-speaker regions that just lose this speaker
+    Object.values(context.wavesurfer.regions.list).forEach(r => {
+        const spk = r.data.speaker || []
+        if (!spk.includes(speaker) || r.data.isDummy) return
+        if (spk.length === 1) {
+            removedRegions.push({ id: r.id, fileIndex: r.data.fileIndex, speaker: spk.slice(), start: r.start, end: r.end, words: r.data.words })
+            context.__deleteRegion(r)
+        } else {
+            trimmedRegions.push({ id: r.id, speaker: spk.slice() })
+            r.data.speaker = spk.filter(s => s !== speaker)
+            r.data.regionChanged = true
+            context.regionUpdated(r)
+        }
+    })
+    const removedDiar = []
+    if (context.externalDiarization) {
+        context.externalDiarization = context.externalDiarization.filter((d, i) => {
+            if (d.speaker !== speaker) return true
+            removedDiar.push({ i, d })
+            return false
+        })
+    }
+    const wasExtra = (context.extraSpeakers || []).includes(speaker)
+    context.extraSpeakers = (context.extraSpeakers || []).filter(s => s !== speaker)
+    const previousTarget = context.laneSpeaker
+    if (context.laneSpeaker === speaker) context.laneSpeaker = null
+
+    pushUndo(context, () => {
+        removedRegions.forEach(rec => recreateRegion(context, rec))
+        trimmedRegions.forEach(rec => {
+            const r = context.getRegion(rec.id)
+            if (r) { r.data.speaker = rec.speaker; context.regionUpdated(r) }
+        })
+        if (removedDiar.length) {
+            context.externalDiarization = context.externalDiarization || []
+            removedDiar.forEach(({ i, d }) => context.externalDiarization.splice(i, 0, d))
+        }
+        if (wasExtra) context.extraSpeakers = [...(context.extraSpeakers || []), speaker]
+        context.laneSpeaker = previousTarget
+    })
+    refreshTextPanels(context, null)
+    changed(context, null)
+    return true
 }
