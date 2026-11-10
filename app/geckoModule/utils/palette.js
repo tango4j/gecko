@@ -21,8 +21,8 @@ export const speakerShades = (color) => {
     const chr = (k, cap) => Math.min(c * k, cap)
     const shades = {
         base: base.hex(),
-        lane: shade(hue, 0.25, chr(0.45, 0.04)),        // very dark track background
-        laneEdge: shade(hue, 0.19, chr(0.4, 0.03)),
+        lane: shade(hue, 0.4, chr(0.6, 0.065)),         // dark track background (light enough to show the hue)
+        laneEdge: shade(hue, 0.35, chr(0.55, 0.055)),
         block: shade(hue, 0.935, chr(0.3, 0.03)),       // very light word / segment block
         blockTop: shade(hue, 0.975, chr(0.15, 0.015)),
         border: shade(hue, 0.62, chr(0.7, 0.08)),

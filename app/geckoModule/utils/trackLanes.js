@@ -20,6 +20,7 @@ export const MAX_LANE_H = 120
 const MIN_DUR = 0.02
 const HANDLE_PX = 6
 const TEXT_MIN_PX = 12          // narrower word boxes hide their text entirely
+const MIN_FONT_PX = 5           // lanes so thin the text would be under this hide it
 const CULL_MARGIN_PX = 200
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -90,9 +91,12 @@ export const renderTrackLanes = (context, force = false) => {
         const left = w.start * g.pps
         const width = Math.max((w.end - w.start) * g.pps, 1)
         const top = laneOf[entry.speaker] * wordH + pad(wordH)
-        const cls = width < TEXT_MIN_PX || wordH < 12 ? 'gk-word notext' : 'gk-word'
+        // text height follows the box: font size = half the box height
+        const boxH = wordH - 2 * pad(wordH)
+        const fontPx = Math.round(boxH * 0.5 * 10) / 10
+        const cls = width < Math.max(TEXT_MIN_PX, fontPx * 1.2) || fontPx < MIN_FONT_PX ? 'gk-word notext' : 'gk-word'
         const title = `${w.text}  [${entry.speaker}]\n${fmt(w.start)} – ${fmt(w.end)} s  (${fmt(w.end - w.start)} s)`
-        boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${wordH - 2 * pad(wordH)}px;line-height:${wordH - 2 * pad(wordH) - 2}px;${shadeVars(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
+        boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${boxH}px;font-size:${fontPx}px;line-height:${Math.max(boxH - 2, 1)}px;${shadeVars(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
     })
     context.laneWords = visibleWords
     word.style.height = `${Math.max(tracks.speakers.length, 1) * wordH}px`
@@ -285,6 +289,7 @@ const openWordEditor = (context, entry) => {
     input.style.top = `${r.top - hostRect.top}px`
     input.style.height = `${Math.max(r.height, 18)}px`
     input.style.width = `${Math.max(r.width, 90)}px`
+    input.style.fontSize = `${Math.max(r.height * 0.5, 11)}px`
     input.style.cssText += shadeVars(getTracks(context).colors[entry.speaker])
     host.appendChild(input)
     context.wordEditor = { input, entry }
