@@ -11,11 +11,9 @@ import { initResizers, applyVideoHeight, applyWaveHeight } from '../utils/resize
 export default (parent) => {
     parent.previousHeight = parseInt(parent.wavesurfer.getHeight())
     parent.totalTime = secondsToMinutes(parent.wavesurfer.getDuration())
-    parent.wavesurfer.enableDragSelection(
-        {
-            drag: false,
-            minLength: constants.MINIMUM_LENGTH
-        });
+    // Segments are no longer drawn or created on the waveform; all editing
+    // happens in the word / RTTM lanes.
+    // parent.wavesurfer.enableDragSelection({ drag: false, minLength: constants.MINIMUM_LENGTH })
 
     parent.$scope.$watch(() => parent.zoomLevel, (newVal) => {
         if (newVal) {

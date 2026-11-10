@@ -140,6 +140,10 @@ class Shortcuts {
         })
 
         hotkeys.filter = (e) => {
+            // typing into the word-box editor must not trigger shortcuts
+            if (e.target.classList && e.target.classList.contains('gk-word-editor')) {
+                return false
+            }
             if (e.target.tagName === 'EDITABLE-WORDS') {
                 const isMacMeta = window.navigator.platform === 'MacIntel' && e.metaKey
                 const isOtherControl = window.navigator.platform !== 'MacIntel' && e.ctrlKey

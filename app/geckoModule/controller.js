@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import Swal from 'sweetalert2'
 import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
 import { markTracksDirty } from './utils/speakerTracks.js'
+import { insertAndEdit } from './utils/trackLanes.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -2424,6 +2425,13 @@ class MainController {
     toggleVideo () {
         this.userConfig.showVideo = !this.userConfig.showVideo
         this.saveUserSettings()
+    }
+
+    // Insert button: a 0.5 s word box + RTTM box at the cursor for the
+    // selected lane's speaker, then edit the new word's text.
+    laneInsert () {
+        if (!this.ready) return
+        insertAndEdit(this)
     }
 
     toggleSubtitles () {

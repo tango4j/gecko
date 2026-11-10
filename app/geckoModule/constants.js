@@ -74,6 +74,7 @@ export const OPERATION_IDS = {
     SPEAKER_LABEL_DELETED : '6',
     SPEAKER_LABEL_MERGED : '7',
     TIMING_CHANGED : '8',
+    LANE_EDIT : '9',
 };
 
 export const NO_SPEAKER_COLOR = 'hsla(0, 0%, 30%, 0.1)';

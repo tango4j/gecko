@@ -1,0 +1,321 @@
+import { v4 as uuidv4 } from 'uuid'
+
+import * as constants from '../constants'
+import { getTracks, markTracksDirty, wordFileIndex } from './speakerTracks.js'
+
+// Edits made from the word / RTTM lanes: insert, text edit, move to another
+// speaker. They write straight into Gecko's regions (so Save exports them)
+// and push a LANE_EDIT undo entry holding a closure that reverts them.
+//
+// Regions are referenced by id inside undo closures and deleted regions are
+// re-created under their old id with their original word objects, so older
+// undo entries keep pointing at the right things.
+
+export const INSERT_DURATION = 0.5
+const JOIN_GAP_SEC = 0.3            // a new / moved word joins a same-speaker turn this close
+
+const extOf = (name) => (name || '').toLowerCase().split('?')[0].split('.').pop()
+export const rttmFileIndex = (context) => (context.filesData || []).findIndex(f => extOf(f.filename) === 'rttm')
+
+const pushUndo = (context, undo) => {
+    context.historyService.undoStack.push([constants.OPERATION_IDS.LANE_EDIT, undo])
+}
+
+const changed = (context, region) => {
+    context.eventBus.trigger('geckoChanged', { event: 'laneEdit', data: region || null })
+    markTracksDirty(context)
+    context.$scope.$evalAsync()
+}
+
+const refreshTextPanels = (context, region) => {
+    context.$timeout(() => {
+        if (region) context.resetEditableWords(region.id)
+        ;(context.filesData || []).forEach((f, i) => context.resetEditableWords(`main_${i}`))
+    })
+}
+
+const speakerColor = (context, speaker) => {
+    for (const f of context.filesData || []) {
+        const e = (f.legend || []).find(l => l.value === speaker)
+        if (e && e.color) return e.color
+    }
+    const n = (context.filesData || []).reduce((a, f) => a + (f.legend || []).filter(l => !l.isDefault).length, 0)
+    return constants.SPEAKER_COLORS[n % constants.SPEAKER_COLORS.length]
+}
+
+// A speaker must exist in a file's legend before a region of that file can use it.
+const ensureLegend = (context, fileIndex, speaker) => {
+    const file = context.filesData[fileIndex]
+    if (!file) return
+    file.legend = file.legend || []
+    if (!file.legend.find(l => l.value === speaker)) {
+        file.legend.push({ value: speaker, color: speakerColor(context, speaker) })
+    }
+}
+
+// Keep a region spanning its words. Bounds are set directly (no
+// region.update / regionUpdated): those run Gecko's fix-ups, which assume
+// contiguous non-overlapping words and would clobber overlapping ones.
+export const fitRegionToWords = (region) => {
+    const timed = (region.data.words || []).filter(w => typeof w.start === 'number' && typeof w.end === 'number')
+    if (!timed.length) return
+    region.data.words.sort((a, b) => a.start - b.start || a.end - b.end)
+    region.start = Math.min(...timed.map(w => w.start))
+    region.end = Math.max(...timed.map(w => w.end))
+    region.data.regionChanged = true
+    region.updateRender()
+}
+
+const hasText = (words) => (words || []).some(w => String(w.text || '').trim())
+
+const createRegion = (context, fileIndex, speaker, words, id) => {
+    ensureLegend(context, fileIndex, speaker)
+    const start = words.length ? Math.min(...words.map(w => w.start)) : 0
+    const end = words.length ? Math.max(...words.map(w => w.end)) : 0
+    const params = {
+        start,
+        end,
+        data: { fileIndex, speaker: [speaker], words, initFinished: true, regionChanged: true },
+        drag: false,
+        minLength: constants.MINIMUM_LENGTH
+    }
+    if (id) params.id = id
+    return context.wavesurfer.addRegion(params)
+}
+
+const createSegmentRegion = (context, fileIndex, speaker, start, end, id) => {
+    ensureLegend(context, fileIndex, speaker)
+    const params = {
+        start,
+        end,
+        data: { fileIndex, speaker: [speaker], words: [], initFinished: true, regionChanged: true },
+        drag: false,
+        minLength: constants.MINIMUM_LENGTH
+    }
+    if (id) params.id = id
+    return context.wavesurfer.addRegion(params)
+}
+
+const deleteRegion = (context, region) => {
+    if (region) context.__deleteRegion(region)
+}
+
+// Turn of `speaker` in `fileIndex` that [t0, t1] overlaps or nearly touches.
+const findTurn = (context, fileIndex, speaker, t0, t1, exclude) => {
+    let best = null
+    let bestGap = Infinity
+    context.iterateRegions(r => {
+        if (r === exclude || r.data.isDummy || (r.data.speaker || [])[0] !== speaker) return
+        const gap = Math.max(r.start - t1, t0 - r.end, 0)
+        if (gap <= JOIN_GAP_SEC && gap < bestGap) {
+            best = r
+            bestGap = gap
+        }
+    }, fileIndex)
+    return best
+}
+
+// Put word `w` into `speaker`'s turn (joining one nearby or creating one).
+// Returns a function undoing exactly that placement.
+const placeWord = (context, fileIndex, speaker, w) => {
+    const turn = findTurn(context, fileIndex, speaker, w.start, w.end)
+    if (turn) {
+        const turnId = turn.id
+        const oldBounds = [turn.start, turn.end]
+        turn.data.words.push(w)
+        fitRegionToWords(turn)
+        return () => {
+            const r = context.getRegion(turnId)
+            if (!r) return
+            r.data.words = r.data.words.filter(x => x !== w)
+            r.start = oldBounds[0]
+            r.end = oldBounds[1]
+            r.updateRender()
+        }
+    }
+    const region = createRegion(context, fileIndex, speaker, [w])
+    const id = region.id
+    return () => deleteRegion(context, context.getRegion(id))
+}
+
+// Take word `w` out of `region` (deleting the region if no text is left).
+// Returns a function putting it back.
+const takeWord = (context, region, w) => {
+    const regionId = region.id
+    const fileIndex = region.data.fileIndex
+    const speaker = (region.data.speaker || [])[0]
+    const words = region.data.words
+    const index = words.indexOf(w)
+    const oldBounds = [region.start, region.end]
+    words.splice(index, 1)
+    if (!hasText(words)) {
+        deleteRegion(context, region)
+        return () => {
+            words.splice(index, 0, w)
+            createRegion(context, fileIndex, speaker, words, regionId)
+        }
+    }
+    fitRegionToWords(region)
+    return () => {
+        const r = context.getRegion(regionId)
+        if (!r) return
+        r.data.words.splice(index, 0, w)
+        r.start = oldBounds[0]
+        r.end = oldBounds[1]
+        r.updateRender()
+    }
+}
+
+// ------------------------------------------------------------------ insert
+
+export const currentLaneSpeaker = (context) => {
+    const speakers = getTracks(context).speakers
+    if (context.laneSpeaker && speakers.includes(context.laneSpeaker)) return context.laneSpeaker
+    return speakers[0] || 'spk0'
+}
+
+// Insert a 0.5 s word box (and RTTM box) for the selected lane's speaker at
+// the cursor. Returns the new word object (so the UI can open its editor).
+export const insertAtCursor = (context) => {
+    const duration = context.wavesurfer.getDuration()
+    const start = Math.min(context.wavesurfer.getCurrentTime(), Math.max(duration - INSERT_DURATION, 0))
+    const end = Math.min(start + INSERT_DURATION, duration)
+    const speaker = currentLaneSpeaker(context)
+    const undos = []
+    let word = null
+
+    const wIndex = wordFileIndex(context)
+    if (wIndex >= 0) {
+        word = { start, end, text: 'word', uuid: uuidv4() }
+        undos.push(placeWord(context, wIndex, speaker, word))
+    }
+
+    const rIndex = rttmFileIndex(context)
+    if (rIndex >= 0) {
+        const seg = createSegmentRegion(context, rIndex, speaker, start, end)
+        const id = seg.id
+        undos.push(() => deleteRegion(context, context.getRegion(id)))
+    } else if (context.externalDiarization) {
+        const d = { speaker, start, end }
+        context.externalDiarization.push(d)
+        undos.push(() => {
+            const i = context.externalDiarization.indexOf(d)
+            if (i >= 0) context.externalDiarization.splice(i, 1)
+        })
+    }
+
+    pushUndo(context, () => undos.reverse().forEach(u => u()))
+    refreshTextPanels(context, null)
+    changed(context, null)
+    return word
+}
+
+// ------------------------------------------------------------------ text
+
+// New text for a word. Several words typed into one box split its time
+// evenly; empty text deletes the word.
+export const setWordText = (context, entry, text) => {
+    const w = entry.w
+    const region = entry.region
+    const tokens = String(text).trim().split(/\s+/).filter(Boolean)
+    if (tokens.length === 1 && tokens[0] === w.text) return
+
+    if (!tokens.length) {
+        const undoTake = takeWord(context, region, w)
+        pushUndo(context, () => undoTake())
+        refreshTextPanels(context, region)
+        changed(context, region)
+        return
+    }
+
+    const regionId = region.id
+    const oldText = w.text
+    const oldEnd = w.end
+    const step = (w.end - w.start) / tokens.length
+    const extra = tokens.slice(1).map((t, i) => ({
+        start: w.start + step * (i + 1),
+        end: i === tokens.length - 2 ? oldEnd : w.start + step * (i + 2),
+        text: t,
+        uuid: uuidv4()
+    }))
+    w.text = tokens[0]
+    if (extra.length) {
+        w.end = w.start + step
+        region.data.words.push(...extra)
+        fitRegionToWords(region)
+    }
+    pushUndo(context, () => {
+        w.text = oldText
+        w.end = oldEnd
+        const r = context.getRegion(regionId)
+        if (r && extra.length) {
+            r.data.words = r.data.words.filter(x => !extra.includes(x))
+            fitRegionToWords(r)
+        }
+    })
+    refreshTextPanels(context, region)
+    changed(context, region)
+}
+
+// ------------------------------------------------------------------ move to speaker
+
+// Move a word to another speaker (and/or time). start0/end0: times before the drag.
+export const moveWordToSpeaker = (context, entry, speaker, start0, end0) => {
+    const w = entry.w
+    const fileIndex = entry.region.data.fileIndex
+    const newTimes = [w.start, w.end]
+    w.start = start0
+    w.end = end0
+    const undoTake = takeWord(context, entry.region, w)
+    w.start = newTimes[0]
+    w.end = newTimes[1]
+    const undoPlace = placeWord(context, fileIndex, speaker, w)
+    pushUndo(context, () => {
+        undoPlace()
+        w.start = start0
+        w.end = end0
+        undoTake()
+    })
+    refreshTextPanels(context, null)
+    changed(context, null)
+}
+
+// Move an RTTM segment to another speaker (and/or time).
+export const moveSegmentToSpeaker = (context, seg, speaker, start0, end0) => {
+    if (seg.region) {
+        const region = seg.region
+        const id = region.id
+        const oldSpeaker = region.data.speaker.slice()
+        ensureLegend(context, region.data.fileIndex, speaker)
+        region.data.speaker = [speaker]
+        region.start = seg.start
+        region.end = seg.end
+        region.data.regionChanged = true
+        if (region.data.words && region.data.words.length) {
+            region.data.words[0].start = seg.start
+            region.data.words[region.data.words.length - 1].end = seg.end
+        }
+        context.regionUpdated(region)
+        pushUndo(context, () => {
+            const r = context.getRegion(id)
+            if (!r) return
+            r.data.speaker = oldSpeaker
+            r.start = start0
+            r.end = end0
+            if (r.data.words && r.data.words.length) {
+                r.data.words[0].start = start0
+                r.data.words[r.data.words.length - 1].end = end0
+            }
+            context.regionUpdated(r)
+        })
+        changed(context, region)
+    } else if (seg.ref) {
+        const ref = seg.ref
+        const old = { speaker: ref.speaker, start: start0, end: end0 }
+        ref.speaker = speaker
+        ref.start = seg.start
+        ref.end = seg.end
+        pushUndo(context, () => Object.assign(ref, old))
+        changed(context, null)
+    }
+}

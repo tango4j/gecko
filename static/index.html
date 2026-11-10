@@ -160,7 +160,8 @@
             <div class="gecko-track" id="gecko-word-track">
                 <div class="gecko-track-header">
                     <b>Words</b> <span class="gecko-track-source"></span>
-                    <span class="gecko-track-hint">drag a word's edges to adjust start/end, drag its middle to move it, click to seek</span>
+                    <span class="gecko-track-target"></span>
+                    <span class="gecko-track-hint">drag edges to adjust start/end, drag the body to move it or onto another speaker's row, double-click to edit text</span>
                 </div>
                 <div class="gecko-track-body"></div>
                 <div class="gk-resizer" data-resize="words" title="Drag to resize the word lanes"></div>
@@ -286,8 +287,8 @@
                 <i class="glyphicon glyphicon-trash"></i>
             </button>
 
-            <button class="btn btn-default" ng-click="ctrl.insertDummyRegion()" ng-disabled="!ctrl.dummyRegion"
-                    title="Insert dummy region"
+            <button class="btn btn-default" ng-click="ctrl.laneInsert()" ng-disabled="!ctrl.ready"
+                    title="Insert a 0.5 s word box and RTTM box at the cursor for the selected speaker row"
                     data-toggle="tooltip" data-placement="top">
                 <i class="glyphicon glyphicon-pushpin"></i>
                 Insert

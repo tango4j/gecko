@@ -29,6 +29,14 @@ class HistoryService {
         var regionIds = this.undoStack.pop();
         let needUpdateEditable = false
 
+        if (regionIds[0] === OPERATION_IDS.LANE_EDIT) {
+            // Insert / text edit / speaker move from the lanes: [op, undoFn]
+            regionIds[1]()
+            context.tracksDirty = true
+            context.$timeout(() => (context.filesData || []).forEach((f, i) => context.resetEditableWords(`main_${i}`)))
+            return
+        }
+
         if (regionIds[0] === OPERATION_IDS.TIMING_CHANGED) {
             // Timing edits from the word / RTTM lanes:
             // [op, regionId|null, target|null, oldStart, oldEnd, oldRegionStart, oldRegionEnd]
@@ -44,11 +52,8 @@ class HistoryService {
                 // no-overlap fix-ups, which break overlapping speaker turns.
                 region.start = oldRegionStart
                 region.end = oldRegionEnd
-                if (region.data.words && region.data.words.length) {
-                    context.regionUpdated(region)
-                } else {
-                    region.updateRender()
-                }
+                if (region.data.words) region.data.words.sort((a, b) => a.start - b.start || a.end - b.end)
+                region.updateRender()
             }
             context.tracksDirty = true
             return
