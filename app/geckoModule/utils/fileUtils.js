@@ -1,4 +1,4 @@
-import videojs from 'video.js'
+import { attachVideo, isVideoFile } from './videoSubtitles.js'
 
 import { getCurrentTimeStamp, formatTime } from './index.js'
 
@@ -46,12 +46,12 @@ export const readVideoFile = (context, file) => {
 export const readMediaFile = async (context, file) => {
     return new Promise(async (resolve) => {
         context.audioFileName = file.name;
-        if (file.type.includes('audio')) {
-            const result = await readAudioFile(file)
-            resolve(result)
-        } else if (file.type.includes('video')) {
+        if (isVideoFile(file)) {
             context.videoMode = true
             const result = await readVideoFile(context, file)
+            resolve(result)
+        } else {
+            const result = await readAudioFile(file)
             resolve(result)
         }
     })
@@ -149,14 +149,7 @@ export const parseAndLoadAudio = async (context, res) => {
                 isVideo: true,
                 url: null
             }
-            context.videoPlayer = videojs('video-js')
-            context.videoPlayer.ready(function () {
-                var fileUrl = URL.createObjectURL(res.audio);
-                var fileType = res.audio.type;
-                this.src({ type: fileType, src: fileUrl });
-                this.load();
-                this.muted(true)
-            })
+            attachVideo(context, res.audio)
             context.wavesurfer.loadDecodedBuffer(fileResult);
         }
 

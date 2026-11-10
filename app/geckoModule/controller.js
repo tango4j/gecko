@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import Swal from 'sweetalert2'
-import videojs from 'video.js'
+import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
+import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
 import initWaveSurfer from './wavesurfer.js'
@@ -2138,15 +2139,8 @@ class MainController {
             if (!mediaFile.isVideo) {
                 this.wavesurfer.loadBlob(mediaFile.data)
             } else {
-                const fileResult = await this.readVideoFile(mediaFile.data)
-                this.videoPlayer = videojs('video-js')
-                this.videoPlayer.ready(function () {
-                    var fileUrl = URL.createObjectURL(mediaFile.data);
-                    var fileType = mediaFile.data.type;
-                    this.src({ type: fileType, src: fileUrl });
-                    this.load();
-                    this.muted(true)
-                })
+                const fileResult = await readVideoFile(this, mediaFile.data)
+                attachVideo(this, mediaFile.data)
                 this.wavesurfer.loadDecodedBuffer(fileResult)
             }
         }
@@ -2422,6 +2416,17 @@ class MainController {
 
     toggleVideo () {
         this.userConfig.showVideo = !this.userConfig.showVideo
+        this.saveUserSettings()
+    }
+
+    toggleSubtitles () {
+        this.userConfig.showSubtitles = !this.userConfig.showSubtitles
+        this.saveUserSettings()
+        this.wavesurfer && renderSubtitles(this, this.wavesurfer.getCurrentTime())
+    }
+
+    setVideoSize (size) {
+        this.userConfig.videoSize = size
         this.saveUserSettings()
     }
     

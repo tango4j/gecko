@@ -1,3 +1,4 @@
+import { isVideoFile } from '../utils/videoSubtitles.js'
 import Swal from 'sweetalert2'
 
 import { ZOOM, TRANSCRIPT_EXTENSIONS, COMPARSION_EXTENSIONS } from '../constants'
@@ -179,7 +180,7 @@ export default (parent) => {
                     const allFiles = [ $scope.newFile, ...extrafiles ] 
                     const mediaFiles = []
                     allFiles.forEach((f) => {
-                        if (f.type.includes('video') || f.type.includes('audio')) {
+                        if (f.type.includes('audio') || isVideoFile(f)) {
                             mediaFiles.push(f)
                         } else {
                             const ext = f.name.split('.').pop()

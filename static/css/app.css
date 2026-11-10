@@ -716,3 +716,102 @@ a.play-part.play-part-clear{
     height: 25px;
     text-align: center;
 }
+/* ---------- Video stage (above the waveform) + subtitle overlay ---------- */
+.gecko-video-section {
+    padding: 8px 16px 4px;
+    background: #111;
+}
+
+.gecko-video-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+}
+
+.gecko-video-toolbar .btn-group .btn.active {
+    background: #2196f3;
+    color: #fff;
+}
+
+.gecko-video-stage {
+    position: relative;
+    margin: 0 auto;
+    width: 100%;
+    background: #000;
+    container-type: size;
+    overflow: hidden;
+}
+
+.gecko-video-stage.video-size-small  { height: 24vh; max-width: calc(24vh * 16 / 9); }
+.gecko-video-stage.video-size-medium { height: 38vh; max-width: calc(38vh * 16 / 9); }
+.gecko-video-stage.video-size-large  { height: 56vh; max-width: calc(56vh * 16 / 9); }
+
+.gecko-video-stage #video-js,
+.gecko-video-stage .video-js {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+.gecko-video-stage .video-js video,
+.gecko-video-stage .video-js .vjs-tech {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Hide video.js chrome: playback is driven from the waveform. */
+.gecko-video-stage .vjs-big-play-button,
+.gecko-video-stage .vjs-control-bar,
+.gecko-video-stage .vjs-loading-spinner,
+.gecko-video-stage .vjs-text-track-display {
+    display: none !important;
+}
+
+.gecko-subtitles {
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    bottom: 6%;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2em;
+    pointer-events: none;
+    text-align: center;
+    font-size: 18px;
+    font-size: clamp(12px, 6cqh, 30px);
+    line-height: 1.35;
+}
+
+.gecko-subtitles.empty {
+    visibility: hidden;
+}
+
+.gecko-sub-line {
+    max-width: 100%;
+    padding: 0.2em 0.6em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    text-shadow: 0 1px 2px #000;
+}
+
+.gecko-sub-speaker {
+    font-weight: 700;
+}
+
+.gecko-sub-speaker-sep,
+.gecko-sub-colon {
+    color: #bbb;
+}
+
+.gecko-sub-word.past    { color: #fff; }
+.gecko-sub-word.future  { color: rgba(255, 255, 255, 0.62); }
+.gecko-sub-word.current { color: #ffe14d; }

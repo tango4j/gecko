@@ -30,29 +30,25 @@ export const parse = (data, $parent) => {
     });
 
 
-    let lastMonologue = -1;
-
-    words.sort((x, y) => {
-        if (x.start >= y.start) {
-            return 1;
-        }
-
-        return -1;
-    })
+    // Group words by segment id rather than by runs of equal ids, so a segment
+    // whose words interleave with another speaker's (overlapped speech) stays
+    // one region instead of being chopped into fragments.
+    const bySegment = new Map();
 
     words.forEach((word) => {
-        if (word.segment_id !== lastMonologue) {
-            lastMonologue = word.segment_id;
-            let speaker = word.speaker;
-
-            monologues.push({
+        // No parsable segment id: one region per word, as before.
+        const key = Number.isNaN(word.segment_id) ? Symbol() : word.segment_id;
+        let monologue = bySegment.get(key);
+        if (!monologue) {
+            monologue = {
                 speaker: word.speaker,
                 start: word.start,
-                words: [word]
-            });
-        } else {
-            monologues[monologues.length - 1].words.push(word);
+                words: []
+            };
+            bySegment.set(key, monologue);
+            monologues.push(monologue);
         }
+        monologue.words.push(word);
 
         // this information is now on the segment/monologue
         delete word.segment_id;
@@ -60,9 +56,9 @@ export const parse = (data, $parent) => {
     });
 
     monologues.forEach((m) => {
-        let lastWord = m.words[m.words.length - 1];
-        m.end = lastWord.end;
+        m.end = Math.max(...m.words.map(w => w.end));
     });
+    monologues.sort((a, b) => a.start - b.start);
 
     $parent.comparsionData.push(words);
 

@@ -126,20 +126,33 @@
     </div>
 </div>
 
-<div class="row row-eq-height justify-content-center align-self-center" ng-class="{ 'no-min-height' : !ctrl.videoMode || !ctrl.userConfig.showVideo }">
-    <button type="button" class="btn btn-primary btn-sm btn-toggle-video" ng-if="ctrl.ready && ctrl.videoMode && ctrl.userConfig.showVideo" ng-click="ctrl.toggleVideo()">
-        <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
-    </button>
-    <div class="col-md-3" ng-show="ctrl.videoMode && ctrl.userConfig.showVideo">
-        <video id="video-js" style="margin: 0 auto;"></video>
-    </div>
-    <div class="btn-toggle-video" ng-if="ctrl.ready && ctrl.videoMode &&!ctrl.userConfig.showVideo">
-        <button type="button" class="btn btn-primary btn-sm" tooltip-placement="right" tooltip-class="gecko-segment-labeling-tooltip"
-        uib-tooltip="Video" ng-click="ctrl.toggleVideo()">
-            <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+<!-- Video stage: shown above the waveform when a video file is loaded -->
+<div class="gecko-video-section" ng-show="ctrl.videoMode">
+    <div class="gecko-video-toolbar" ng-show="ctrl.ready">
+        <button type="button" class="btn btn-default btn-xs" ng-click="ctrl.toggleVideo()"
+                title="Show/hide video">
+            <i class="glyphicon" ng-class="ctrl.userConfig.showVideo ? 'glyphicon-eye-close' : 'glyphicon-film'"></i>
+            {{ ctrl.userConfig.showVideo ? 'Hide video' : 'Show video' }}
         </button>
+        <button type="button" class="btn btn-xs" ng-show="ctrl.userConfig.showVideo"
+                ng-class="ctrl.userConfig.showSubtitles ? 'btn-primary' : 'btn-default'"
+                ng-click="ctrl.toggleSubtitles()" title="Show/hide subtitles on the video">
+            <i class="glyphicon glyphicon-subtitles"></i> Subtitles
+        </button>
+        <div class="btn-group btn-group-xs" ng-show="ctrl.userConfig.showVideo" title="Video size">
+            <button type="button" class="btn btn-default" ng-repeat="size in ['small', 'medium', 'large']"
+                    ng-class="{ active: ctrl.userConfig.videoSize === size }"
+                    ng-click="ctrl.setVideoSize(size)">{{ size.charAt(0).toUpperCase() }}</button>
+        </div>
     </div>
-    <div class="col-md-{{ ctrl.videoMode && ctrl.userConfig.showVideo ? '9' : '12' }} pl-0 pr-0">
+    <div class="gecko-video-stage video-size-{{ ctrl.userConfig.videoSize || 'medium' }}" ng-show="ctrl.userConfig.showVideo">
+        <video id="video-js" class="video-js" playsinline muted></video>
+        <div id="gecko-subtitles" class="gecko-subtitles empty" ng-show="ctrl.userConfig.showSubtitles !== false"></div>
+    </div>
+</div>
+
+<div class="row justify-content-center align-self-center no-min-height">
+    <div class="col-md-12 pl-0 pr-0">
         <div id="waveform" ng-show="ctrl.userConfig.showWaveform" context-menu="regionContextMenu" app="ctrl">
             <p class="floating-filename top-float" ng-show="ctrl.ready" ng-if="ctrl.filesData.length == 2">{{ctrl.filesData[0].filename.substring(0, ctrl.filesData[1].filename.lastIndexOf("."))}}</p>
             <p class="floating-filename bottom-float" ng-show="ctrl.ready" ng-if="ctrl.filesData.length == 2">{{ctrl.filesData[1].filename.substring(0, ctrl.filesData[1].filename.lastIndexOf("."))}}</p>

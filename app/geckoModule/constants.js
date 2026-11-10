@@ -115,7 +115,9 @@ export const DEFAULT_USER_CONFIG = {
     showTranscriptDifferences: true,
     showWaveform: true,
     showTranscriptFiles: {},
-    showVideo: true
+    showVideo: true,
+    showSubtitles: true,
+    videoSize: 'medium'
 }
 export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv', 'seglst']
 
