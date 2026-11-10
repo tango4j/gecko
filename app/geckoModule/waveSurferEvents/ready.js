@@ -6,6 +6,7 @@ import * as constants from '../constants'
 import play from './play'
 import { startMediaLoop } from '../utils/videoSubtitles.js'
 import { markTracksDirty } from '../utils/speakerTracks.js'
+import { initResizers, applyVideoHeight, applyWaveHeight } from '../utils/resizers.js'
 
 export default (parent) => {
     parent.previousHeight = parseInt(parent.wavesurfer.getHeight())
@@ -101,6 +102,9 @@ export default (parent) => {
     parent.loader = false
     parent.ready = true
     markTracksDirty(parent)
+    initResizers(parent)
+    applyWaveHeight(parent)
+    applyVideoHeight(parent)
     startMediaLoop(parent)
 
     window.onbeforeunload = (event) => {

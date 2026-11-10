@@ -29,18 +29,26 @@ class HistoryService {
         var regionIds = this.undoStack.pop();
         let needUpdateEditable = false
 
-        if (regionIds[0] === OPERATION_IDS.WORD_TIMING_CHANGED) {
-            // [op, regionId, word, oldStart, oldEnd, oldRegionStart, oldRegionEnd]
-            const [, regionId, word, oldStart, oldEnd, oldRegionStart, oldRegionEnd] = regionIds
-            const region = context.getRegion(regionId)
-            word.start = oldStart
-            word.end = oldEnd
+        if (regionIds[0] === OPERATION_IDS.TIMING_CHANGED) {
+            // Timing edits from the word / RTTM lanes:
+            // [op, regionId|null, target|null, oldStart, oldEnd, oldRegionStart, oldRegionEnd]
+            //   target: a word object or a TextGrid diarization interval
+            const [, regionId, target, oldStart, oldEnd, oldRegionStart, oldRegionEnd] = regionIds
+            if (target) {
+                target.start = oldStart
+                target.end = oldEnd
+            }
+            const region = regionId !== null ? context.getRegion(regionId) : null
             if (region) {
                 // Set bounds directly: region.update() would run Gecko's
                 // no-overlap fix-ups, which break overlapping speaker turns.
                 region.start = oldRegionStart
                 region.end = oldRegionEnd
-                context.regionUpdated(region)
+                if (region.data.words && region.data.words.length) {
+                    context.regionUpdated(region)
+                } else {
+                    region.updateRender()
+                }
             }
             context.tracksDirty = true
             return

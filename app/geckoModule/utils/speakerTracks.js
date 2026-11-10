@@ -60,16 +60,23 @@ const buildTracks = (context) => {
         }, wIndex)
     }
 
+    // diar entries: { speaker, start, end, region?, ref? }
+    //   region: a Gecko region of a loaded .rttm file (edits go to the region)
+    //   ref:    a TextGrid diarization interval (edits go to that object)
+    // Segments derived from the word file's turns are read-only.
     let diarSource = 'turns'
+    let diarEditable = false
     if (rIndex >= 0) {
         diarSource = context.filesData[rIndex].filename
+        diarEditable = true
         context.iterateRegions(region => {
             if (region.data.isDummy) return
-            regionSpeakers(region).forEach(speaker => diar.push({ speaker, start: region.start, end: region.end }))
+            regionSpeakers(region).forEach(speaker => diar.push({ speaker, start: region.start, end: region.end, region }))
         }, rIndex)
     } else if (context.externalDiarization && context.externalDiarization.length) {
         diarSource = 'TextGrid diarization tiers'
-        context.externalDiarization.forEach(d => diar.push({ ...d }))
+        diarEditable = true
+        context.externalDiarization.forEach(d => diar.push({ speaker: d.speaker, start: d.start, end: d.end, ref: d }))
     } else {
         turns.forEach(t => diar.push({ speaker: t.speaker, start: t.start, end: t.end }))
     }
@@ -91,6 +98,9 @@ const buildTracks = (context) => {
     turns.forEach(t => turnsBySpeaker[t.speaker].push(t))
 
     diar.sort((a, b) => a.start - b.start)
+    const diarBySpeaker = {}
+    speakers.forEach(sp => { diarBySpeaker[sp] = [] })
+    diar.forEach(d => { if (diarBySpeaker[d.speaker]) diarBySpeaker[d.speaker].push(d) })
 
     return {
         speakers,
@@ -99,7 +109,9 @@ const buildTracks = (context) => {
         wordsBySpeaker,
         turnsBySpeaker,
         diar,
+        diarBySpeaker,
         diarSource,
+        diarEditable,
         wordSource: wIndex >= 0 && context.filesData[wIndex] ? context.filesData[wIndex].filename : ''
     }
 }

@@ -139,16 +139,12 @@
                 ng-click="ctrl.toggleSubtitles()" title="Show/hide subtitles on the video">
             <i class="glyphicon glyphicon-subtitles"></i> Subtitles
         </button>
-        <div class="btn-group btn-group-xs" ng-show="ctrl.userConfig.showVideo" title="Video size">
-            <button type="button" class="btn btn-default" ng-repeat="size in ['small', 'medium', 'large']"
-                    ng-class="{ active: ctrl.userConfig.videoSize === size }"
-                    ng-click="ctrl.setVideoSize(size)">{{ size.charAt(0).toUpperCase() }}</button>
-        </div>
     </div>
-    <div class="gecko-video-stage video-size-{{ ctrl.userConfig.videoSize || 'medium' }}" ng-show="ctrl.userConfig.showVideo">
+    <div class="gecko-video-stage" ng-show="ctrl.userConfig.showVideo">
         <video id="video-js" class="video-js" playsinline muted></video>
         <div id="gecko-subtitles" class="gecko-subtitles empty" ng-show="ctrl.userConfig.showSubtitles !== false"></div>
     </div>
+    <div class="gk-resizer dark" data-resize="video" ng-show="ctrl.ready && ctrl.userConfig.showVideo" title="Drag to resize the video"></div>
 </div>
 
 <div class="row justify-content-center align-self-center no-min-height">
@@ -158,6 +154,7 @@
             <p class="floating-filename bottom-float" ng-show="ctrl.ready" ng-if="ctrl.filesData.length == 2">{{ctrl.filesData[1].filename.substring(0, ctrl.filesData[1].filename.lastIndexOf("."))}}</p>
         </div>
         <div id="timeline" ng-show="ctrl.userConfig.showWaveform"></div>
+        <div class="gk-resizer" data-resize="wave" ng-show="ctrl.ready && ctrl.userConfig.showWaveform" title="Drag to resize the waveform"></div>
         <!-- Per-speaker lanes, aligned with the waveform's zoom/scroll -->
         <div id="gecko-tracks" ng-show="ctrl.ready && ctrl.userConfig.showWaveform">
             <div class="gecko-track" id="gecko-word-track">
@@ -166,12 +163,15 @@
                     <span class="gecko-track-hint">drag a word's edges to adjust start/end, drag its middle to move it, click to seek</span>
                 </div>
                 <div class="gecko-track-body"></div>
+                <div class="gk-resizer" data-resize="words" title="Drag to resize the word lanes"></div>
             </div>
             <div class="gecko-track" id="gecko-diar-track">
                 <div class="gecko-track-header">
                     <b>RTTM</b> <span class="gecko-track-source"></span>
+                    <span class="gecko-track-hint"></span>
                 </div>
                 <div class="gecko-track-body"></div>
+                <div class="gk-resizer" data-resize="rttm" title="Drag to resize the RTTM lanes"></div>
             </div>
         </div>
         <div class="row" ng-show="ctrl.ready && !ctrl.userConfig.showWaveform">

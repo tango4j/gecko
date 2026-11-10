@@ -565,8 +565,18 @@ input[type=range].gecko-mini-player-range {
 .floating-filename.top-float {
     top: 5px;
 }
+/* Anchor the file-name tags to the (now resizable) waveform itself:
+   top of the first file's half, top of the second file's half. */
+#waveform {
+    position: relative;
+}
 .floating-filename.bottom-float {
-    bottom: 25px;
+    top: calc(50% + 3px);
+}
+.floating-filename {
+    font-size: 11px;
+    line-height: 16px;
+    margin: 0;
 }
 
 input[type="checkbox"]{
@@ -745,9 +755,10 @@ a.play-part.play-part-clear{
     overflow: hidden;
 }
 
-.gecko-video-stage.video-size-small  { height: 24vh; max-width: calc(24vh * 16 / 9); }
-.gecko-video-stage.video-size-medium { height: 38vh; max-width: calc(38vh * 16 / 9); }
-.gecko-video-stage.video-size-large  { height: 56vh; max-width: calc(56vh * 16 / 9); }
+.gecko-video-stage {
+    height: 38vh;
+    max-width: calc(38vh * 16 / 9);
+}
 
 .gecko-video-stage #video-js,
 .gecko-video-stage .video-js {
@@ -972,3 +983,80 @@ a.play-part.play-part-clear{
     pointer-events: none;
     z-index: 5;
 }
+
+/* ---------- Height drag bars (two-sided vertical arrow cursor) ---------- */
+.gk-resizer {
+    position: relative;
+    height: 7px;
+    cursor: ns-resize;
+    background: #e4e4e4;
+    border-top: 1px solid #d0d0d0;
+    border-bottom: 1px solid #d0d0d0;
+}
+
+.gk-resizer::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 2px;
+    width: 36px;
+    height: 1px;
+    margin-left: -18px;
+    border-top: 1px solid #999;
+    border-bottom: 1px solid #999;
+}
+
+.gk-resizer:hover,
+.gk-resizer.active {
+    background: #c8e6a0;
+}
+
+.gk-resizer.dark {
+    background: #222;
+    border-color: #111;
+    margin-top: 4px;
+}
+
+.gk-resizer.dark::after {
+    border-color: #777;
+}
+
+.gk-resizer.dark:hover,
+.gk-resizer.dark.active {
+    background: #3d5a1e;
+}
+
+body.gk-resizing,
+body.gk-resizing * {
+    cursor: ns-resize !important;
+    user-select: none !important;
+}
+
+#gecko-diar-track .gecko-track-body.editable .gk-seg {
+    cursor: pointer;
+}
+
+.gk-seg:hover,
+.gk-seg.dragging {
+    z-index: 2;
+}
+
+#gecko-diar-track .gecko-track-body.editable .gk-seg:hover,
+#gecko-diar-track .gecko-track-body.editable .gk-seg.dragging {
+    box-shadow: 0 0 0 1px #000;
+}
+
+#gecko-diar-track .gecko-track-body.editable .gk-seg:hover::before,
+#gecko-diar-track .gecko-track-body.editable .gk-seg:hover::after,
+#gecko-diar-track .gecko-track-body.editable .gk-seg.dragging::before,
+#gecko-diar-track .gecko-track-body.editable .gk-seg.dragging::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.gk-seg::before { left: 0; }
+.gk-seg::after { right: 0; }

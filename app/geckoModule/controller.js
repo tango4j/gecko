@@ -2432,10 +2432,6 @@ class MainController {
         this.wavesurfer && renderSubtitles(this, this.wavesurfer.getCurrentTime())
     }
 
-    setVideoSize (size) {
-        this.userConfig.videoSize = size
-        this.saveUserSettings()
-    }
     
 }
 
