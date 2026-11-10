@@ -987,23 +987,38 @@ a.play-part.play-part-clear{
 /* ---------- Height drag bars (two-sided vertical arrow cursor) ---------- */
 .gk-resizer {
     position: relative;
-    height: 7px;
+    z-index: 60;
+    height: 10px;
     cursor: ns-resize;
-    background: #e4e4e4;
-    border-top: 1px solid #d0d0d0;
-    border-bottom: 1px solid #d0d0d0;
+    background: #dcdcdc;
+    border-top: 1px solid #c4c4c4;
+    border-bottom: 1px solid #c4c4c4;
 }
 
+/* Invisible grab zone reaching up over the bottom edge of the display
+   above, so the two-sided cursor appears right at that edge. */
+.gk-resizer::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -7px;
+    bottom: -3px;
+    cursor: ns-resize;
+}
+
+/* grip */
 .gk-resizer::after {
     content: '';
     position: absolute;
     left: 50%;
-    top: 2px;
-    width: 36px;
-    height: 1px;
-    margin-left: -18px;
-    border-top: 1px solid #999;
-    border-bottom: 1px solid #999;
+    top: 3px;
+    width: 48px;
+    height: 2px;
+    margin-left: -24px;
+    border-top: 1px solid #888;
+    border-bottom: 1px solid #888;
+    pointer-events: none;
 }
 
 .gk-resizer:hover,
@@ -1012,7 +1027,7 @@ a.play-part.play-part-clear{
 }
 
 .gk-resizer.dark {
-    background: #222;
+    background: #2a2a2a;
     border-color: #111;
     margin-top: 4px;
 }
