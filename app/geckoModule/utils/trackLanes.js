@@ -1,7 +1,7 @@
 import { getTracks, markTracksDirty } from './speakerTracks.js'
 import { OPERATION_IDS } from '../constants'
 import { shadeVars } from './palette.js'
-import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker } from './laneEdits.js'
+import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker, deleteSelection } from './laneEdits.js'
 
 // Two lane displays under the waveform, one row per speaker:
 //   #gecko-word-track : a box per word (start..end), text clipped to the box;
@@ -12,7 +12,7 @@ import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveS
 //                       word file's speaker turns
 // Both follow the waveform's zoom and horizontal scroll pixel-for-pixel.
 
-export const DEFAULT_WORD_LANE_H = 24
+export const DEFAULT_WORD_LANE_H = 36
 export const DEFAULT_DIAR_LANE_H = 14
 export const MIN_LANE_H = 8
 export const MAX_LANE_H = 120
@@ -59,6 +59,27 @@ const laneLabels = (speakers, colors, laneH, selected) => speakers.map((s, i) =>
     `<div class="gk-lane-label${s === selected ? ' selected' : ''}" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
 ).join('')
 
+// ---------------------------------------------------------------- selection
+// One click selects a word box or an editable RTTM box; Delete / the trash
+// button removes it (laneEdits.deleteSelection).
+
+const isSelectedWord = (context, entry) => {
+    const s = context.laneSelection
+    return !!s && s.kind === 'word' && s.w === entry.w
+}
+
+const isSelectedSeg = (context, seg) => {
+    const s = context.laneSelection
+    if (!s || s.kind !== 'seg') return false
+    return seg.region ? s.regionId === seg.region.id : (!!seg.ref && s.ref === seg.ref)
+}
+
+export const setLaneSelection = (context, selection) => {
+    context.laneSelection = selection || null
+    renderTrackLanes(context, true)
+    context.$scope.$evalAsync()
+}
+
 export const renderTrackLanes = (context, force = false) => {
     if (context.trackDrag) return
     const g = geometry(context)
@@ -91,10 +112,11 @@ export const renderTrackLanes = (context, force = false) => {
         const left = w.start * g.pps
         const width = Math.max((w.end - w.start) * g.pps, 1)
         const top = laneOf[entry.speaker] * wordH + pad(wordH)
-        // text height follows the box: font size = half the box height
+        // text height follows the box: font size = a third of the box height
         const boxH = wordH - 2 * pad(wordH)
-        const fontPx = Math.round(boxH * 0.5 * 10) / 10
-        const cls = width < Math.max(TEXT_MIN_PX, fontPx * 1.2) || fontPx < MIN_FONT_PX ? 'gk-word notext' : 'gk-word'
+        const fontPx = Math.round(boxH / 3 * 10) / 10
+        let cls = width < Math.max(TEXT_MIN_PX, fontPx * 1.2) || fontPx < MIN_FONT_PX ? 'gk-word notext' : 'gk-word'
+        if (isSelectedWord(context, entry)) cls += ' selected'
         const title = `${w.text}  [${entry.speaker}]\n${fmt(w.start)} – ${fmt(w.end)} s  (${fmt(w.end - w.start)} s)`
         boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${boxH}px;font-size:${fontPx}px;line-height:${Math.max(boxH - 2, 1)}px;${shadeVars(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
     })
@@ -117,7 +139,7 @@ export const renderTrackLanes = (context, force = false) => {
         const top = laneOf[d.speaker] * diarH + pad(diarH)
         const lock = tracks.diarEditable ? '' : '\n(read-only: derived from the word file — load an .rttm to edit)'
         const title = `${d.speaker}\n${fmt(d.start)} – ${fmt(d.end)} s  (${fmt(d.end - d.start)} s)${lock}`
-        segs += `<div class="gk-seg" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${diarH - 2 * pad(diarH)}px;${shadeVars(tracks.colors[d.speaker])}" title="${esc(title)}"></div>`
+        segs += `<div class="gk-seg${isSelectedSeg(context, d) ? ' selected' : ''}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${diarH - 2 * pad(diarH)}px;${shadeVars(tracks.colors[d.speaker])}" title="${esc(title)}"></div>`
     })
     context.laneSegs = visibleSegs
     diar.classList.toggle('editable', !!tracks.diarEditable)
@@ -203,7 +225,8 @@ const wordAdapter = (context, entry) => ({
         pushTimingUndo(context, region.id, entry.w, s0, e0, oldRegionStart, oldRegionEnd)
         afterEdit(context, region)
     },
-    moveTo: (speaker, s0, e0) => moveWordToSpeaker(context, entry, speaker, s0, e0)
+    moveTo: (speaker, s0, e0) => moveWordToSpeaker(context, entry, speaker, s0, e0),
+    selection: () => ({ kind: 'word', w: entry.w })
 })
 
 const segAdapter = (context, seg) => ({
@@ -225,7 +248,8 @@ const segAdapter = (context, seg) => ({
             afterEdit(context, null)
         }
     },
-    moveTo: (speaker, s0, e0) => moveSegmentToSpeaker(context, seg, speaker, s0, e0)
+    moveTo: (speaker, s0, e0) => moveSegmentToSpeaker(context, seg, speaker, s0, e0),
+    selection: () => (seg.region ? { kind: 'seg', regionId: seg.region.id } : { kind: 'seg', ref: seg.ref })
 })
 
 const timeAtClientX = (context, clientX, body) => {
@@ -289,7 +313,7 @@ const openWordEditor = (context, entry) => {
     input.style.top = `${r.top - hostRect.top}px`
     input.style.height = `${Math.max(r.height, 18)}px`
     input.style.width = `${Math.max(r.width, 90)}px`
-    input.style.fontSize = `${Math.max(r.height * 0.5, 11)}px`
+    input.style.fontSize = `${Math.max(r.height / 3, 11)}px`
     input.style.cssText += shadeVars(getTracks(context).colors[entry.speaker])
     host.appendChild(input)
     context.wordEditor = { input, entry }
@@ -360,6 +384,7 @@ export const initTrackLanes = (context) => {
         if (!entry) {
             const t = timeAtClientX(context, e.clientX, word)
             if (t !== null) context.seek(t)
+            if (context.laneSelection) setLaneSelection(context, null)
             context.$scope.$evalAsync()
             return
         }
@@ -385,6 +410,7 @@ export const initTrackLanes = (context) => {
         }
         const t = seg ? seg.start : timeAtClientX(context, e.clientX, diar)
         if (t !== null) context.seek(t)
+        if (context.laneSelection) setLaneSelection(context, null)
         context.$scope.$evalAsync()
     })
 
@@ -445,12 +471,30 @@ export const initTrackLanes = (context) => {
             } else if (timeChanged) {
                 d.adapter.commit(d.start0, d.end0)
             }
+            context.laneSelection = d.adapter.selection()
         } else if (!d.moved) {
+            // one click: select the box (and move the cursor to it)
             context.seek(d.adapter.get().start)
-            context.$scope.$evalAsync()
+            setLaneSelection(context, d.adapter.selection())
         }
         if (d.moved) renderTrackLanes(context, true)
+        context.$scope.$evalAsync()
     })
 
     window.addEventListener('resize', () => { context.trackRenderKey = null })
+
+    document.addEventListener('keydown', (e) => {
+        if (!context.laneSelection) return
+        const t = e.target
+        const typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|EDITABLE-WORDS)$/.test(t.tagName))
+        if (typing) return
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault()
+            e.stopPropagation()
+            deleteSelection(context)
+            renderTrackLanes(context, true)
+        } else if (e.key === 'Escape') {
+            setLaneSelection(context, null)
+        }
+    }, true)
 }

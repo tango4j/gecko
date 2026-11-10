@@ -3,6 +3,7 @@ import Swal from 'sweetalert2'
 import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
 import { markTracksDirty } from './utils/speakerTracks.js'
 import { insertAndEdit } from './utils/trackLanes.js'
+import { deleteSelection } from './utils/laneEdits.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -1776,9 +1777,10 @@ class MainController {
                         throw `Negative duration in file ${self.filesData[fileIndex].filename}\n Start: ${region.start}\n End: ${region.end}`
                     }
 
-                    if (last_end > region.start + constants.TOLERANCE) {
-                        throw `Overlapping in file: ${self.filesData[fileIndex].filename}. \n Time: ${last_end.toFixed(2)}`;
-                    }
+                    // Overlapping regions are valid here: turns of different
+                    // speakers overlap when people talk over each other, and the
+                    // word lanes allow same-speaker overlaps. Only reject
+                    // negative durations (above).
                     last_end = region.end;
                 }
             }, fileIndex, true)
@@ -2425,6 +2427,13 @@ class MainController {
     toggleVideo () {
         this.userConfig.showVideo = !this.userConfig.showVideo
         this.saveUserSettings()
+    }
+
+    // Trash button / Ctrl+Delete: delete the word or RTTM box selected in the lanes.
+    laneDelete () {
+        if (!this.laneSelection) return
+        deleteSelection(this)
+        this.tracksDirty = true
     }
 
     // Insert button: a 0.5 s word box + RTTM box at the cursor for the

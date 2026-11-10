@@ -1183,3 +1183,12 @@ body.gk-resizing * {
     border: 1px solid var(--label);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
+
+/* selected word / RTTM box (one click); Delete or the trash button removes it */
+.gk-word.selected,
+.gk-seg.selected {
+    z-index: 3;
+    outline: 2px solid #ffffff;
+    outline-offset: 0;
+    box-shadow: 0 0 0 3px var(--glow), 0 3px 12px rgba(0, 0, 0, 0.6);
+}

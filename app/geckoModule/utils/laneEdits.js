@@ -319,3 +319,55 @@ export const moveSegmentToSpeaker = (context, seg, speaker, start0, end0) => {
         changed(context, null)
     }
 }
+
+// ------------------------------------------------------------------ delete
+
+// Can the current lane selection be deleted? (Read-only RTTM segments
+// derived from the word file are never selected.)
+export const canDeleteSelection = (context) => !!context.laneSelection
+
+export const deleteSelection = (context) => {
+    const sel = context.laneSelection
+    if (!sel) return false
+    context.laneSelection = null
+
+    if (sel.kind === 'word') {
+        let region = null
+        context.iterateRegions(r => {
+            if (!region && (r.data.words || []).includes(sel.w)) region = r
+        })
+        if (!region) return false
+        const undoTake = takeWord(context, region, sel.w)
+        pushUndo(context, () => undoTake())
+        refreshTextPanels(context, null)
+        changed(context, null)
+        return true
+    }
+
+    if (sel.kind === 'seg' && sel.regionId) {
+        const region = context.getRegion(sel.regionId)
+        if (!region) return false
+        const keep = {
+            id: region.id,
+            fileIndex: region.data.fileIndex,
+            speaker: (region.data.speaker || [])[0],
+            start: region.start,
+            end: region.end
+        }
+        deleteRegion(context, region)
+        pushUndo(context, () => createSegmentRegion(context, keep.fileIndex, keep.speaker, keep.start, keep.end, keep.id))
+        changed(context, null)
+        return true
+    }
+
+    if (sel.kind === 'seg' && sel.ref && context.externalDiarization) {
+        const list = context.externalDiarization
+        const i = list.indexOf(sel.ref)
+        if (i < 0) return false
+        list.splice(i, 1)
+        pushUndo(context, () => list.splice(i, 0, sel.ref))
+        changed(context, null)
+        return true
+    }
+    return false
+}

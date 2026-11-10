@@ -281,9 +281,9 @@
                 <i class="glyphicon glyphicon-scissors"></i>
             </button>
 
-            <button class="btn btn-default" ng-click="ctrl.deleteRegionAction(ctrl.selectedRegion)"
-                    title="Delete Segment"
-                    ng-disabled="!ctrl.selectedRegion || ctrl.selectedRegion != ctrl.cursorRegion">
+            <button class="btn btn-default" ng-click="ctrl.laneDelete()"
+                    title="Delete the selected word / RTTM box (click a box to select it; Delete key works too)"
+                    ng-disabled="!ctrl.laneSelection">
                 <i class="glyphicon glyphicon-trash"></i>
             </button>
 

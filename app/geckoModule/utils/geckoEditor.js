@@ -1060,13 +1060,16 @@ class GeckoEdtior {
     }
 
     setSelected (uuid) {
+        // a word added from the lanes may not be rendered in this panel yet
         const wordEl = this.wordsEls.get(uuid)
+        if (!wordEl) return
         wordEl.classList.add('selected-word')
         this.selectedWord = wordEl
     }
 
     setFound (uuid) {
         const wordEl = this.wordsEls.get(uuid)
+        if (!wordEl) return
         wordEl.classList.add('found-word')
     }
     resetFound () {

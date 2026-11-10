@@ -166,6 +166,12 @@ class Shortcuts {
     }
 
     deleteRegionHandler (e) {
+        // the lanes' selection takes precedence over Gecko's cursor region
+        if (this.app.laneSelection) {
+            e.preventDefault()
+            this.app.laneDelete()
+            return
+        }
         this.app.deleteRegionAction(this.app.selectedRegion)
     }
 
