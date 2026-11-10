@@ -29,6 +29,23 @@ class HistoryService {
         var regionIds = this.undoStack.pop();
         let needUpdateEditable = false
 
+        if (regionIds[0] === OPERATION_IDS.WORD_TIMING_CHANGED) {
+            // [op, regionId, word, oldStart, oldEnd, oldRegionStart, oldRegionEnd]
+            const [, regionId, word, oldStart, oldEnd, oldRegionStart, oldRegionEnd] = regionIds
+            const region = context.getRegion(regionId)
+            word.start = oldStart
+            word.end = oldEnd
+            if (region) {
+                // Set bounds directly: region.update() would run Gecko's
+                // no-overlap fix-ups, which break overlapping speaker turns.
+                region.start = oldRegionStart
+                region.end = oldRegionEnd
+                context.regionUpdated(region)
+            }
+            context.tracksDirty = true
+            return
+        }
+
         if (regionIds[0] === OPERATION_IDS.SPEAKER_NAME_AND_COLOR_CHANGED) {
 
             for (let i = 0; i < regionIds[5].length; i++){

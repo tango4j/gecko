@@ -815,3 +815,160 @@ a.play-part.play-part-clear{
 .gecko-sub-word.past    { color: #fff; }
 .gecko-sub-word.future  { color: rgba(255, 255, 255, 0.62); }
 .gecko-sub-word.current { color: #ffe14d; }
+
+/* ---------- Per-speaker lanes under the waveform (words + RTTM) ---------- */
+#gecko-tracks {
+    border-top: 1px solid #ddd;
+    background: #fafafa;
+    user-select: none;
+}
+
+.gecko-track-header {
+    font-size: 11px;
+    line-height: 16px;
+    padding: 0 6px;
+    color: #555;
+    background: #f0f0f0;
+    border-bottom: 1px solid #e2e2e2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gecko-track-source {
+    color: #888;
+    margin-right: 10px;
+}
+
+.gecko-track-hint {
+    color: #aaa;
+    font-style: italic;
+}
+
+.gecko-track-body {
+    position: relative;
+    overflow: hidden;
+    background: #8bc34a;
+    cursor: pointer;
+}
+
+#gecko-diar-track .gecko-track-body {
+    border-top: 1px solid #6a9a33;
+}
+
+.gk-lane {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.gk-lane.odd {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.gk-lane-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    will-change: transform;
+}
+
+.gk-lane-label {
+    position: absolute;
+    left: 0;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(30, 30, 30, 0.72);
+    border-radius: 0 3px 3px 0;
+    pointer-events: none;
+    z-index: 3;
+    max-height: 100%;
+}
+
+#gecko-diar-track .gk-lane-label {
+    font-size: 9px;
+}
+
+/* A word box spans exactly [start, end]; its text never leaves the box. */
+.gk-word {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--c) 55%, white);
+    border: 1px solid color-mix(in srgb, var(--c) 55%, black);
+    border-radius: 2px;
+    color: #111;
+    font-size: 11px;
+    line-height: 18px;
+    cursor: grab;
+}
+
+.gk-word > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: clip;
+    padding: 0 2px;
+    pointer-events: none;
+}
+
+.gk-word.notext > span {
+    display: none;
+}
+
+.gk-word:hover,
+.gk-word.dragging {
+    z-index: 2;
+    box-shadow: 0 0 0 1px #000;
+}
+
+/* edge handles, visible on hover */
+.gk-word:hover::before,
+.gk-word:hover::after,
+.gk-word.dragging::before,
+.gk-word.dragging::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.gk-word::before { left: 0; }
+.gk-word::after { right: 0; }
+
+.gk-seg {
+    position: absolute;
+    box-sizing: border-box;
+    background: color-mix(in srgb, var(--c) 70%, white);
+    border: 1px solid color-mix(in srgb, var(--c) 55%, black);
+    border-radius: 2px;
+}
+
+.gk-track-cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #000;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.gk-drag-label {
+    position: absolute;
+    padding: 1px 5px;
+    font-size: 11px;
+    color: #fff;
+    background: #222;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 5;
+}

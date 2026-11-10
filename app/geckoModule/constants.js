@@ -75,6 +75,7 @@ export const OPERATION_IDS = {
     SPEAKER_LABEL_ADDED : '5',
     SPEAKER_LABEL_DELETED : '6',
     SPEAKER_LABEL_MERGED : '7',
+    WORD_TIMING_CHANGED : '8',
 };
 
 export const NO_SPEAKER_COLOR = 'hsla(0, 0%, 30%, 0.1)';
@@ -119,7 +120,7 @@ export const DEFAULT_USER_CONFIG = {
     showSubtitles: true,
     videoSize: 'medium'
 }
-export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv', 'seglst']
+export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv', 'seglst', 'textgrid']
 
 export const TIME_OFFSET = 0.0001
 

@@ -7,7 +7,7 @@ var config = {
         pixelRatio: 1,
         autoCenter : true,
         autoCenterImmediately: true,
-        height: '350',
+        height: '105',
         useSpectrogram: true,
         scrollParent: true,
         responsive: true

@@ -183,7 +183,7 @@ export default (parent) => {
                         if (f.type.includes('audio') || isVideoFile(f)) {
                             mediaFiles.push(f)
                         } else {
-                            const ext = f.name.split('.').pop()
+                            const ext = f.name.split('.').pop().toLowerCase()
                             if ($scope.isComparsionMode) {
                                 if (COMPARSION_EXTENSIONS.includes(ext)) {
                                     const alreadyAdd = $scope.transcriptFiles.find((tf) => {

@@ -158,6 +158,22 @@
             <p class="floating-filename bottom-float" ng-show="ctrl.ready" ng-if="ctrl.filesData.length == 2">{{ctrl.filesData[1].filename.substring(0, ctrl.filesData[1].filename.lastIndexOf("."))}}</p>
         </div>
         <div id="timeline" ng-show="ctrl.userConfig.showWaveform"></div>
+        <!-- Per-speaker lanes, aligned with the waveform's zoom/scroll -->
+        <div id="gecko-tracks" ng-show="ctrl.ready && ctrl.userConfig.showWaveform">
+            <div class="gecko-track" id="gecko-word-track">
+                <div class="gecko-track-header">
+                    <b>Words</b> <span class="gecko-track-source"></span>
+                    <span class="gecko-track-hint">drag a word's edges to adjust start/end, drag its middle to move it, click to seek</span>
+                </div>
+                <div class="gecko-track-body"></div>
+            </div>
+            <div class="gecko-track" id="gecko-diar-track">
+                <div class="gecko-track-header">
+                    <b>RTTM</b> <span class="gecko-track-source"></span>
+                </div>
+                <div class="gecko-track-body"></div>
+            </div>
+        </div>
         <div class="row" ng-show="ctrl.ready && !ctrl.userConfig.showWaveform">
             <mini-player parent="ctrl"></mini-player>
         </div>

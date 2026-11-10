@@ -1,16 +1,18 @@
 import videojs from 'video.js'
 
-// Video stage + subtitle overlay.
+import { getTracks } from './speakerTracks.js'
+import { initTrackLanes, renderTrackLanes, updateTrackCursors } from './trackLanes.js'
+
+// Video stage + per-speaker subtitle overlay + the frame loop that also drives
+// the word / RTTM lanes.
 //
 // Wavesurfer stays the master clock (it owns the decoded audio track); the
-// <video> element is muted and slaved to it. A requestAnimationFrame loop keeps
-// the two in sync and repaints the subtitle overlay from the live regions, so
-// edits made in the transcript panels show up on the video immediately.
+// <video> element is muted and slaved to it.
 
-const SUBTITLE_MAX_CHARS = 84      // ~2 lines of subtitle text per page
+const SUBTITLE_MAX_CHARS = 56      // ~1 line per speaker so overlaps stay compact
 const SUBTITLE_MIN_BREAK_CHARS = 28 // allow an early page break after . ? ! once this long
 const DRIFT_TOLERANCE_SEC = 0.25
-const REGION_TOLERANCE_SEC = 0.00001
+const TURN_TOLERANCE_SEC = 0.00001
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => HTML_ESCAPES[c])
@@ -52,15 +54,16 @@ export const attachVideo = (context, file) => {
         this.muted(true)
     })
 
-    startVideoSync(context)
+    startMediaLoop(context)
 }
 
-export const startVideoSync = (context) => {
-    if (context.videoSyncRaf) return
+// One requestAnimationFrame loop: video drift correction, subtitles, lanes.
+export const startMediaLoop = (context) => {
+    if (context.mediaLoopRaf) return
 
     const tick = () => {
-        context.videoSyncRaf = requestAnimationFrame(tick)
-        if (!context.videoMode || !context.wavesurfer || !context.wavesurfer.backend) return
+        context.mediaLoopRaf = requestAnimationFrame(tick)
+        if (!context.ready || !context.wavesurfer || !context.wavesurfer.backend) return
 
         let time
         try {
@@ -68,36 +71,23 @@ export const startVideoSync = (context) => {
         } catch (e) {
             return
         }
-        const player = context.videoPlayer
+
+        const player = context.videoMode && context.videoPlayer
         if (player && context.isPlaying && !player.paused()) {
             if (Math.abs(player.currentTime() - time) > DRIFT_TOLERANCE_SEC) {
                 player.currentTime(time)
             }
         }
-        renderSubtitles(context, time)
+
+        initTrackLanes(context)
+        renderTrackLanes(context)
+        updateTrackCursors(context, time)
+        if (context.videoMode) renderSubtitles(context, time)
     }
     tick()
 }
 
-const MAX_SUBTITLE_LINES = 3
-
-// All regions active at `time`. Normally one, but per-speaker transcripts with
-// overlapped speech can have several; each gets its own subtitle line.
-const findRegionsAt = (context, fileIndex, time) => {
-    const found = []
-    context.iterateRegions(r => {
-        if (r.data.isDummy) return
-        if (time >= r.start - REGION_TOLERANCE_SEC && time <= r.end + REGION_TOLERANCE_SEC) {
-            found.push(r)
-        }
-    }, fileIndex)
-    found.sort((a, b) => a.start - b.start)
-    // When one region ends exactly where the next begins, show only the newer one.
-    const active = found.filter(r => !found.some(o => o !== r && o.start > r.start && Math.abs(o.start - r.end) <= REGION_TOLERANCE_SEC * 10))
-    return active.slice(-MAX_SUBTITLE_LINES)
-}
-
-// Split a region's words into subtitle "pages" no longer than ~2 lines.
+// Split an utterance's words into subtitle "pages" no longer than ~2 lines.
 export const paginateWords = (words) => {
     const pages = []
     let page = []
@@ -132,43 +122,42 @@ const pickPage = (pages, time) => {
     return pages[index]
 }
 
-const speakerHtml = (context, region) => {
-    const fileData = context.filesData[region.data.fileIndex]
-    const legend = (fileData && fileData.legend) || []
-    const speakers = region.data.speaker || []
-    if (!speakers.length) return ''
-    return speakers.map(s => {
-        const entry = legend.find(l => l.value === s)
-        const color = entry ? entry.color : '#ccc'
-        return `<span class="gecko-sub-speaker" style="color:${escapeHtml(color)}">${escapeHtml(s)}</span>`
-    }).join('<span class="gecko-sub-speaker-sep">+</span>')
-}
-
-const regionLineHtml = (context, region, time) => {
-    const words = region.data.words || []
-    const pages = paginateWords(words)
-    if (!pages.length) return ''
-    const page = pickPage(pages, time)
-
-    const body = page.map(w => {
-        let cls = 'gecko-sub-word'
-        if (w.start !== undefined && w.end !== undefined) {
-            if (time >= w.end) cls += ' past'
-            else if (time >= w.start) cls += ' current'
-            else cls += ' future'
-        }
-        return `<span class="${cls}">${escapeHtml(w.text.trim())}</span>`
-    }).join(' ')
-
-    const speaker = speakerHtml(context, region)
-    return `<div class="gecko-sub-line">${speaker ? speaker + '<span class="gecko-sub-colon">:</span> ' : ''}${body}</div>`
-}
-
+// One independent line per speaker who is mid-utterance at `time`:
+//   [spk0] you don't have the cards
+//   [spk1] i know i know
+// Lines keep a fixed speaker order so they don't jump around during overlaps.
 export const buildSubtitleHtml = (context, time) => {
-    const fileIndex = context.selectedFileIndex || 0
-    return findRegionsAt(context, fileIndex, time)
-        .map(r => regionLineHtml(context, r, time))
-        .join('')
+    const tracks = getTracks(context)
+    const lines = []
+
+    tracks.speakers.forEach(speaker => {
+        let turn
+        ;(tracks.turnsBySpeaker[speaker] || []).forEach(t => {
+            if (time < t.start - TURN_TOLERANCE_SEC || time > t.end + TURN_TOLERANCE_SEC) return
+            if ((t.region.data.speaker || [])[0] !== speaker) return
+            if (!turn || t.start > turn.start) turn = t
+        })
+        if (!turn) return
+
+        const pages = paginateWords(turn.region.data.words || [])
+        if (!pages.length) return
+        const page = pickPage(pages, time)
+
+        const body = page.map(w => {
+            let cls = 'gecko-sub-word'
+            if (typeof w.start === 'number' && typeof w.end === 'number') {
+                if (time >= w.end) cls += ' past'
+                else if (time >= w.start) cls += ' current'
+                else cls += ' future'
+            }
+            return `<span class="${cls}">${escapeHtml(w.text.trim())}</span>`
+        }).join(' ')
+
+        const color = escapeHtml(tracks.colors[speaker] || '#fff')
+        lines.push(`<div class="gecko-sub-line"><span class="gecko-sub-speaker" style="color:${color}">[${escapeHtml(speaker)}]</span> ${body}</div>`)
+    })
+
+    return lines.join('')
 }
 
 export const renderSubtitles = (context, time) => {

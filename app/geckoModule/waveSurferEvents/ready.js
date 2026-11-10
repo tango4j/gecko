@@ -4,6 +4,8 @@ import {secondsToMinutes} from '../utils'
 import * as constants from '../constants'
 
 import play from './play'
+import { startMediaLoop } from '../utils/videoSubtitles.js'
+import { markTracksDirty } from '../utils/speakerTracks.js'
 
 export default (parent) => {
     parent.previousHeight = parseInt(parent.wavesurfer.getHeight())
@@ -98,6 +100,8 @@ export default (parent) => {
 
     parent.loader = false
     parent.ready = true
+    markTracksDirty(parent)
+    startMediaLoop(parent)
 
     window.onbeforeunload = (event) => {
         return confirm('Confirm refresh')

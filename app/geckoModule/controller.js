@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import Swal from 'sweetalert2'
 import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
+import { markTracksDirty } from './utils/speakerTracks.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -381,6 +382,12 @@ class MainController {
         // this.wavesurfer.on('region-out', (region) => wavesurferEvents.regionOut(this, region))
         this.wavesurfer.on('region-click', (region, e) => wavesurferEvents.regionClick(this, region, e))
         this.wavesurfer.on('pause', () => wavesurferEvents.pause(this))
+
+        // Keep the per-speaker subtitle / lane model in step with any region change.
+        const dirty = () => markTracksDirty(this)
+        ;['region-created', 'region-updated', 'region-removed'].forEach(ev => this.wavesurfer.on(ev, dirty))
+        this.eventBus.on('geckoChanged', dirty)
+        this.eventBus.on('regionTextChanged', dirty)
     }
 
     bindDummyRegionEvents () {

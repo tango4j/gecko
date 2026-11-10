@@ -5,6 +5,7 @@ import { parse as parseRTTM, convert as convertRTTM } from './rttm'
 // import { parse as parseTSV, convert as convertTSV } from './tsv'
 import { parse as parseJSON, convert as convertJSON } from './json'
 import { parse as parseSRT, convert as convertSRT } from './srt'
+import { parse as parseTextGrid } from './textgrid'
 import {
     parse as parseSegLST,
     convert as convertSegLST,
@@ -51,6 +52,8 @@ const parse = (filename, data, app, parserOptions, ...args) => {
             return parseCTM(data, app, parserOptions, ...args)
         case 'srt':
             return parseSRT(data, app, parserOptions, ...args)
+        case 'textgrid':
+            return parseTextGrid(data, app, parserOptions, ...args)
         default:
             alert('format ' + ext + ' is not supported')
             return undefined
