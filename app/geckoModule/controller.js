@@ -1984,7 +1984,8 @@ class MainController {
 
         if (this.newSpeakerName === '' || legend.find(s => s.value === this.newSpeakerName)) return
 
-        const firstDefaultIndex = legend.findIndex(s => s.isDefault)
+        let firstDefaultIndex = legend.findIndex(s => s.isDefault)
+        if (firstDefaultIndex < 0) firstDefaultIndex = legend.length
         const regularSpeakers = legend.slice(0, firstDefaultIndex)
 
         let activeColors = regularSpeakers.map(speaker => speaker.color);

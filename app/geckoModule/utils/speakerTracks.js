@@ -17,6 +17,18 @@ export const markTracksDirty = (context) => {
     context.tracksDirty = true
 }
 
+// Speakers registered in the files' legends (the "Segment Labeling" list).
+export const registrySpeakers = (context) => {
+    const out = []
+    ;(context.filesData || []).forEach(f => (f.legend || []).forEach(l => {
+        if (!l.isDefault && l.value && !out.includes(l.value)) out.push(l.value)
+    }))
+    return out
+}
+
+const registrySignature = (context) => (context.filesData || [])
+    .map(f => (f.legend || []).map(l => `${l.value}:${l.color}`).join(',')).join('|')
+
 const speakerColor = (context, speaker, index) => {
     for (const f of context.filesData || []) {
         const entry = (f.legend || []).find(l => l.value === speaker)
@@ -86,8 +98,9 @@ const buildTracks = (context) => {
     const speakerSet = new Set()
     words.forEach(x => speakerSet.add(x.speaker))
     diar.forEach(x => speakerSet.add(x.speaker))
-    // speakers added with "+ Speaker" have a row before they have any boxes
-    ;(context.extraSpeakers || []).forEach(s => speakerSet.add(s))
+    // every speaker in the Segment Labeling registry gets a row, even before
+    // it has any boxes (added there or with "+ Speaker")
+    registrySpeakers(context).forEach(s => speakerSet.add(s))
     const speakers = [...speakerSet].sort(speakerSort)
     const colors = {}
     speakers.forEach((s, i) => { colors[s] = speakerColor(context, s, i) })
@@ -121,6 +134,13 @@ const buildTracks = (context) => {
 }
 
 export const getTracks = (context) => {
+    // registry edits in the Segment Labeling panel (add / rename / delete /
+    // recolor) don't fire region events, so watch the legends too
+    const sig = registrySignature(context)
+    if (sig !== context.registrySig) {
+        context.registrySig = sig
+        context.tracksDirty = true
+    }
     if (!context.tracksCache || context.tracksDirty) {
         context.tracksCache = buildTracks(context)
         context.tracksDirty = false

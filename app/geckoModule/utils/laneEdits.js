@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid'
 
 import * as constants from '../constants'
-import { getTracks, markTracksDirty, wordFileIndex } from './speakerTracks.js'
+import { getTracks, markTracksDirty, wordFileIndex, registrySpeakers } from './speakerTracks.js'
+import { prepareLegend } from './index.js'
 
 // Edits made from the word / RTTM lanes: insert, text edit, move to another
 // speaker. They write straight into Gecko's regions (so Save exports them)
@@ -46,12 +47,30 @@ const speakerColor = (context, speaker) => {
 // A speaker must exist in a file's legend before a region of that file can use it.
 const ensureLegend = (context, fileIndex, speaker, color) => {
     const file = context.filesData[fileIndex]
-    if (!file) return
+    if (!file) return false
     file.legend = file.legend || []
-    if (!file.legend.find(l => l.value === speaker)) {
-        file.legend.push({ value: speaker, color: color || speakerColor(context, speaker) })
-    }
+    if (file.legend.find(l => l.value === speaker)) return false
+    // same shape and ordering Gecko's own "add speaker" produces
+    file.legend.push({ value: speaker, name: '', color: color || speakerColor(context, speaker) })
+    file.legend = prepareLegend(file.legend)
+    return true
 }
+
+const removeFromLegend = (context, fileIndex, speaker) => {
+    const file = context.filesData[fileIndex]
+    if (!file || !file.legend) return null
+    const entry = file.legend.find(l => l.value === speaker)
+    if (!entry) return null
+    file.legend = prepareLegend(file.legend.filter(l => l !== entry))
+    return entry
+}
+
+const restoreLegend = (context, removed) => removed.forEach(({ i, entry }) => {
+    const f = context.filesData[i]
+    if (f && !(f.legend || []).find(l => l.value === entry.value)) {
+        f.legend = prepareLegend([...(f.legend || []), entry])
+    }
+})
 
 // Keep a region spanning its words. Bounds are set directly (no
 // region.update / regionUpdated): those run Gecko's fix-ups, which assume
@@ -378,40 +397,51 @@ export const deleteSelection = (context) => {
 
 // ------------------------------------------------------------------ speakers
 
-const nextSpeakerName = (speakers) => {
-    let n = 0
-    speakers.forEach(s => {
-        const m = /^spk(\d+)$/.exec(s)
-        if (m) n = Math.max(n, +m[1] + 1)
+// Next speaker name following the names already in use: the most common
+// "<prefix><number>" pattern continues from its highest number, keeping any
+// zero padding (speaker_5 -> speaker_6, spk2 -> spk3, S09 -> S10).
+export const nextSpeakerName = (names) => {
+    const groups = {}
+    names.forEach(n => {
+        const m = /^(.*?)(\d+)$/.exec(String(n))
+        if (!m) return
+        const g = groups[m[1]] = groups[m[1]] || { count: 0, max: -1, width: 1 }
+        g.count++
+        if (+m[2] > g.max) { g.max = +m[2]; g.width = m[2].length }
     })
-    if (!n) n = speakers.length
-    while (speakers.includes(`spk${n}`)) n++
-    return `spk${n}`
+    const best = Object.entries(groups).sort((a, b) => b[1].count - a[1].count || b[1].max - a[1].max)[0]
+    let prefix = 'speaker_'
+    let n = names.length
+    let width = 1
+    if (best) {
+        prefix = best[0]
+        n = best[1].max + 1
+        width = String(best[1].max).length < best[1].width ? best[1].width : 1
+    }
+    let name = prefix + String(n).padStart(width, '0')
+    while (names.includes(name)) name = prefix + String(++n).padStart(width, '0')
+    return name
 }
 
-// "+ Speaker": an empty row in both lanes, ready for boxes to be dragged or
-// inserted into it. It also joins each file's legend (Segment Labeling).
+const unusedColor = (context) => {
+    const used = new Set()
+    ;(context.filesData || []).forEach(f => (f.legend || []).forEach(l => used.add(l.color)))
+    const free = constants.SPEAKER_COLORS.find(c => !used.has(c))
+    return free || constants.SPEAKER_COLORS[registrySpeakers(context).length % constants.SPEAKER_COLORS.length]
+}
+
+// "+ Speaker": register the next speaker in every file's Segment Labeling
+// list; the lanes give it an empty row, ready for boxes.
 export const addSpeaker = (context) => {
-    const speakers = getTracks(context).speakers
-    const name = nextSpeakerName(speakers)
-    const color = constants.SPEAKER_COLORS[speakers.length % constants.SPEAKER_COLORS.length]
-    context.extraSpeakers = context.extraSpeakers || []
-    context.extraSpeakers.push(name)
-    const legendAdded = []
-    ;(context.filesData || []).forEach((f, i) => {
-        if (!(f.legend || []).find(l => l.value === name)) {
-            ensureLegend(context, i, name, color)
-            legendAdded.push(i)
-        }
-    })
+    const known = [...new Set([...registrySpeakers(context), ...getTracks(context).speakers])]
+    const name = nextSpeakerName(known)
+    const color = unusedColor(context)
+    const added = []
+    ;(context.filesData || []).forEach((f, i) => { if (ensureLegend(context, i, name, color)) added.push(i) })
     const previousTarget = context.laneSpeaker
     context.laneSpeaker = name
     pushUndo(context, () => {
-        context.extraSpeakers = (context.extraSpeakers || []).filter(s => s !== name)
-        legendAdded.forEach(i => {
-            const f = context.filesData[i]
-            if (f) f.legend = (f.legend || []).filter(l => l.value !== name)
-        })
+        added.forEach(i => removeFromLegend(context, i, name))
         context.laneSpeaker = previousTarget
     })
     changed(context, null)
@@ -456,12 +486,18 @@ export const deleteSpeaker = (context, speaker) => {
             return false
         })
     }
-    const wasExtra = (context.extraSpeakers || []).includes(speaker)
-    context.extraSpeakers = (context.extraSpeakers || []).filter(s => s !== speaker)
+    // unregister from every file's Segment Labeling list
+    const legendRemoved = []
+    ;(context.filesData || []).forEach((f, i) => {
+        const entry = removeFromLegend(context, i, speaker)
+        if (entry) legendRemoved.push({ i, entry })
+    })
     const previousTarget = context.laneSpeaker
     if (context.laneSpeaker === speaker) context.laneSpeaker = null
 
     pushUndo(context, () => {
+        // registry first: recreated regions need their speaker in the legend
+        restoreLegend(context, legendRemoved)
         removedRegions.forEach(rec => recreateRegion(context, rec))
         trimmedRegions.forEach(rec => {
             const r = context.getRegion(rec.id)
@@ -471,7 +507,6 @@ export const deleteSpeaker = (context, speaker) => {
             context.externalDiarization = context.externalDiarization || []
             removedDiar.forEach(({ i, d }) => context.externalDiarization.splice(i, 0, d))
         }
-        if (wasExtra) context.extraSpeakers = [...(context.extraSpeakers || []), speaker]
         context.laneSpeaker = previousTarget
     })
     refreshTextPanels(context, null)

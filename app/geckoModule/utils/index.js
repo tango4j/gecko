@@ -168,7 +168,8 @@ export const sortLegend = (legend) => {
 }
 
 export const splitLegendSpeakers = (legend) => {
-    const firstDefaultIndex = legend.findIndex(s => s.isDefault)
+    let firstDefaultIndex = legend.findIndex(s => s.isDefault)
+    if (firstDefaultIndex < 0) firstDefaultIndex = legend.length   // no non-speech tokens
     const regularSpeakers = legend.slice(0, firstDefaultIndex)
     const defaultSpeakers = legend.slice(firstDefaultIndex, legend.length)
     return {
@@ -180,15 +181,10 @@ export const splitLegendSpeakers = (legend) => {
 export const prepareLegend = (fileDataLegend, appLegend=[]) => {
     const legend = sortLegend(fileDataLegend)
     let { regularSpeakers, defaultSpeakers } = splitLegendSpeakers(legend)
-    regularSpeakers = regularSpeakers.sort((a, b) => {
-        if (a.value.toLowerCase() > b.value.toLowerCase()) {
-            return 1
-        } else if (a.value.toLowerCase() < b.value.toLowerCase()) {
-            return -1
-        } else {
-            return 0
-        }
-    }).map((rs, index) => {
+    // natural order: speaker_2 before speaker_10
+    regularSpeakers = regularSpeakers.sort((a, b) =>
+        a.value.toLowerCase().localeCompare(b.value.toLowerCase(), undefined, { numeric: true })
+    ).map((rs, index) => {
         let color_index = index + appLegend.length;
         return {
             ...rs,

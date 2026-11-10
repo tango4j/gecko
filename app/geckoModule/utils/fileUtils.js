@@ -103,7 +103,6 @@ const parseFileData = (context, fileName, fileData, fileS3Subfolder = null) => {
 export const parseAndLoadText = async (context, res) => {
     context.filesData = []
     context.externalDiarization = null
-    context.extraSpeakers = []
     context.laneSelection = null
 
     return new Promise(async (resolve) => {

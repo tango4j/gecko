@@ -48,17 +48,9 @@ export const NO_CONFIDENCE = -1;
 
 export const UNKNOWN_SPEAKER_COLOR = '#808080';
 
-const speakers = [
-    { display: '[noise]', value: '[noise]', shortcut: 1, color: '#d1eaa3'},
-    { display: '[crosstalk]', value: '[crosstalk]', shortcut: 2, color: '#d1eaa3'},
-    { display: '[laughter]', value: '[laughter]', shortcut: 3, color: '#d1eaa3'},
-    { display: '[music]', value: '[music]', shortcut: 4, color: '#d1eaa3'},
-    { display: '[dialtone]', value: '[dialtone]', shortcut: 5, color: '#d1eaa3'},
-//    { display: '[bubble]', value: '[bubble]', shortcut: 6, color: '#d1eaa3'},
-//    { display: '[recording]', value: '[recording]', shortcut: 7, color: '#d1eaa3'},
-//    { display: '[foreign]', value: '[foreign]', shortcut: 8, color: '#d1eaa3'},
-//    { display: '[beep]', value: '[beep]', shortcut: 9, color: '#d1eaa3'}
-]
+// Non-speech tokens ([noise], [crosstalk], [laughter], [music], [dialtone])
+// used to be pre-registered in every legend; this fork lists speakers only.
+const speakers = []
 
 export const defaultSpeakers = speakers;
 
