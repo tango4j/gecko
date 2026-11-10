@@ -12,20 +12,18 @@ export const PLAYBACK_SPEED = [
     0.5, 0.75, 1, 1.25, 1.5, 1.75, 2
 ];
 
+// 8 speaker colors (toned down): blue, green, orange, red, violet, brown,
+// grey, magenta. Lanes / blocks derive dark and light shades from these
+// (utils/palette.js); a 9th speaker cycles back to blue.
 export const SPEAKER_COLORS = [
-    "#76B900",
-    "#54F2D9",
-    "#fbeb9b",
-    "#f58230",
-    "#3cb44b",
-    "#800000",
-    "#ffe119",
-    "#911eb4",
-    "#46f0f0",
-    "#008080",
-    "#aa6e28",
-    "#808000",
-    "#000080"
+    "#4e79a7",
+    "#5f9e55",
+    "#d4863f",
+    "#c4524a",
+    "#8c6bb1",
+    "#8c6d52",
+    "#7f858d",
+    "#b05a8f"
 ];
 
 export const UNKNOWN_SPEAKER = "<NA>";

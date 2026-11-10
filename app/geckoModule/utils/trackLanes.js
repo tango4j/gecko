@@ -1,5 +1,6 @@
 import { getTracks, markTracksDirty } from './speakerTracks.js'
 import { OPERATION_IDS } from '../constants'
+import { shadeVars } from './palette.js'
 
 // Two lane displays under the waveform, one row per speaker:
 //   #gecko-word-track : a box per word (start..end), text clipped to the box;
@@ -48,12 +49,12 @@ const els = () => ({
     diar: document.querySelector('#gecko-diar-track .gecko-track-body')
 })
 
-const laneScaffold = (speakers, laneH) => speakers.map((s, i) =>
-    `<div class="gk-lane${i % 2 ? ' odd' : ''}" style="top:${i * laneH}px;height:${laneH}px"></div>`
+const laneScaffold = (speakers, colors, laneH) => speakers.map((s, i) =>
+    `<div class="gk-lane" style="top:${i * laneH}px;height:${laneH}px;${shadeVars(colors[s])}"></div>`
 ).join('')
 
 const laneLabels = (speakers, colors, laneH) => speakers.map((s, i) =>
-    `<div class="gk-lane-label" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;color:${esc(colors[s])}">${esc(s)}</div>`
+    `<div class="gk-lane-label" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
 ).join('')
 
 export const renderTrackLanes = (context, force = false) => {
@@ -90,11 +91,11 @@ export const renderTrackLanes = (context, force = false) => {
         const top = laneOf[entry.speaker] * wordH + pad(wordH)
         const cls = width < TEXT_MIN_PX || wordH < 12 ? 'gk-word notext' : 'gk-word'
         const title = `${w.text}  [${entry.speaker}]\n${fmt(w.start)} – ${fmt(w.end)} s  (${fmt(w.end - w.start)} s)`
-        boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${wordH - 2 * pad(wordH)}px;line-height:${wordH - 2 * pad(wordH) - 2}px;--c:${esc(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
+        boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${wordH - 2 * pad(wordH)}px;line-height:${wordH - 2 * pad(wordH) - 2}px;${shadeVars(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
     })
     context.laneWords = visibleWords
     word.style.height = `${Math.max(tracks.speakers.length, 1) * wordH}px`
-    word.innerHTML = laneScaffold(tracks.speakers, wordH) +
+    word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH) +
         `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
         laneLabels(tracks.speakers, tracks.colors, wordH) +
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'
@@ -110,12 +111,12 @@ export const renderTrackLanes = (context, force = false) => {
         const top = laneOf[d.speaker] * diarH + pad(diarH)
         const lock = tracks.diarEditable ? '' : '\n(read-only: derived from the word file — load an .rttm to edit)'
         const title = `${d.speaker}\n${fmt(d.start)} – ${fmt(d.end)} s  (${fmt(d.end - d.start)} s)${lock}`
-        segs += `<div class="gk-seg" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${diarH - 2 * pad(diarH)}px;--c:${esc(tracks.colors[d.speaker])}" title="${esc(title)}"></div>`
+        segs += `<div class="gk-seg" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${diarH - 2 * pad(diarH)}px;${shadeVars(tracks.colors[d.speaker])}" title="${esc(title)}"></div>`
     })
     context.laneSegs = visibleSegs
     diar.classList.toggle('editable', !!tracks.diarEditable)
     diar.style.height = `${Math.max(tracks.speakers.length, 1) * diarH}px`
-    diar.innerHTML = laneScaffold(tracks.speakers, diarH) +
+    diar.innerHTML = laneScaffold(tracks.speakers, tracks.colors, diarH) +
         `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${segs}</div>` +
         laneLabels(tracks.speakers, tracks.colors, diarH) +
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'

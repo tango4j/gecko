@@ -23,6 +23,7 @@
     "aws-sdk": "^2.663.0",
     "body-parser": "^1.19.0",
     "bootstrap3": "^3.3.5",
+    "chroma-js": "^2.4.2",
     "cors": "^2.8.5",
     "crel": "^4.2.1",
     "csv-string": "^4.0.1",

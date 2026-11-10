@@ -1,6 +1,7 @@
 import videojs from 'video.js'
 
 import { getTracks } from './speakerTracks.js'
+import { subtitleVars } from './palette.js'
 import { initTrackLanes, renderTrackLanes, updateTrackCursors } from './trackLanes.js'
 
 // Video stage + per-speaker subtitle overlay + the frame loop that also drives
@@ -153,8 +154,8 @@ export const buildSubtitleHtml = (context, time) => {
             return `<span class="${cls}">${escapeHtml(w.text.trim())}</span>`
         }).join(' ')
 
-        const color = escapeHtml(tracks.colors[speaker] || '#fff')
-        lines.push(`<div class="gecko-sub-line"><span class="gecko-sub-speaker" style="color:${color}">[${escapeHtml(speaker)}]</span> ${body}</div>`)
+        const vars = escapeHtml(subtitleVars(tracks.colors[speaker] || '#7f858d'))
+        lines.push(`<div class="gecko-sub-line" style="${vars}"><span class="gecko-sub-speaker">[${escapeHtml(speaker)}]</span> ${body}</div>`)
     })
 
     return lines.join('')
