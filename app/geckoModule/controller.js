@@ -3,7 +3,7 @@ import Swal from 'sweetalert2'
 import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
 import { markTracksDirty } from './utils/speakerTracks.js'
 import { insertAndEdit } from './utils/trackLanes.js'
-import { deleteSelection, addSpeaker } from './utils/laneEdits.js'
+import { deleteSelection, addSpeaker, splitSelection, splittableItems } from './utils/laneEdits.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -2428,6 +2428,16 @@ class MainController {
     toggleVideo () {
         this.userConfig.showVideo = !this.userConfig.showVideo
         this.saveUserSettings()
+    }
+
+    // Scissors: split the selected word / RTTM boxes at the cursor.
+    laneSplit () {
+        if (!this.ready) return
+        splitSelection(this)
+    }
+
+    canLaneSplit () {
+        return !!this.ready && !!this.laneSelection && splittableItems(this).length > 0
     }
 
     // Trash button / Ctrl+Delete: delete the word or RTTM box selected in the lanes.

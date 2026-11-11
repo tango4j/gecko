@@ -343,33 +343,37 @@ export const moveSegmentToSpeaker = (context, seg, speaker, start0, end0) => {
 
 // Can the current lane selection be deleted? (Read-only RTTM segments
 // derived from the word file are never selected.)
-export const canDeleteSelection = (context) => !!context.laneSelection
+export const canDeleteSelection = (context) => selectionItems(context).length > 0
 
-export const deleteSelection = (context) => {
-    const sel = context.laneSelection
-    if (!sel) return false
-    context.laneSelection = null
+// The lane selection is a list of items:
+//   { kind: 'word', w }            a word box (its live word object)
+//   { kind: 'seg', regionId }      a box of a loaded .rttm file
+//   { kind: 'seg', ref }           a TextGrid diarization interval
+//   { kind: 'speaker', speaker }   a whole speaker row (selected alone)
+export const selectionItems = (context) => context.laneSelection || []
 
-    if (sel.kind === 'speaker') {
-        return deleteSpeaker(context, sel.speaker)
+export const sameItem = (a, b) => !!a && !!b && a.kind === b.kind && (
+    a.kind === 'word' ? a.w === b.w
+        : a.kind === 'speaker' ? a.speaker === b.speaker
+            : (a.regionId ? a.regionId === b.regionId : a.ref === b.ref))
+
+const regionOfWord = (context, w) => {
+    let region = null
+    context.iterateRegions(r => {
+        if (!region && (r.data.words || []).includes(w)) region = r
+    })
+    return region
+}
+
+// Remove one word / segment; returns a function undoing it (or null).
+const removeItem = (context, item) => {
+    if (item.kind === 'word') {
+        const region = regionOfWord(context, item.w)
+        return region ? takeWord(context, region, item.w) : null
     }
-
-    if (sel.kind === 'word') {
-        let region = null
-        context.iterateRegions(r => {
-            if (!region && (r.data.words || []).includes(sel.w)) region = r
-        })
-        if (!region) return false
-        const undoTake = takeWord(context, region, sel.w)
-        pushUndo(context, () => undoTake())
-        refreshTextPanels(context, null)
-        changed(context, null)
-        return true
-    }
-
-    if (sel.kind === 'seg' && sel.regionId) {
-        const region = context.getRegion(sel.regionId)
-        if (!region) return false
+    if (item.kind === 'seg' && item.regionId) {
+        const region = context.getRegion(item.regionId)
+        if (!region) return null
         const keep = {
             id: region.id,
             fileIndex: region.data.fileIndex,
@@ -378,21 +382,141 @@ export const deleteSelection = (context) => {
             end: region.end
         }
         deleteRegion(context, region)
-        pushUndo(context, () => createSegmentRegion(context, keep.fileIndex, keep.speaker, keep.start, keep.end, keep.id))
-        changed(context, null)
-        return true
+        return () => createSegmentRegion(context, keep.fileIndex, keep.speaker, keep.start, keep.end, keep.id)
     }
-
-    if (sel.kind === 'seg' && sel.ref && context.externalDiarization) {
+    if (item.kind === 'seg' && item.ref && context.externalDiarization) {
         const list = context.externalDiarization
-        const i = list.indexOf(sel.ref)
-        if (i < 0) return false
+        const i = list.indexOf(item.ref)
+        if (i < 0) return null
         list.splice(i, 1)
-        pushUndo(context, () => list.splice(i, 0, sel.ref))
-        changed(context, null)
-        return true
+        return () => list.splice(i, 0, item.ref)
     }
-    return false
+    return null
+}
+
+// Delete everything selected (one undo step for the whole selection).
+export const deleteSelection = (context) => {
+    const items = selectionItems(context)
+    if (!items.length) return false
+    context.laneSelection = null
+
+    const speaker = items.find(i => i.kind === 'speaker')
+    if (speaker) return deleteSpeaker(context, speaker.speaker)
+
+    const undos = items.map(item => removeItem(context, item)).filter(Boolean)
+    if (!undos.length) return false
+    pushUndo(context, () => undos.reverse().forEach(u => u()))
+    refreshTextPanels(context, null)
+    changed(context, null)
+    return true
+}
+
+// ------------------------------------------------------------------ split
+
+const MIN_PART_SEC = 0.01
+
+const itemTimes = (context, item) => {
+    if (item.kind === 'word') return { start: item.w.start, end: item.w.end }
+    if (item.kind === 'seg' && item.regionId) {
+        const r = context.getRegion(item.regionId)
+        return r ? { start: r.start, end: r.end } : null
+    }
+    if (item.kind === 'seg' && item.ref) return { start: item.ref.start, end: item.ref.end }
+    return null
+}
+
+// Selected boxes the cursor lies inside (these are what Split cuts).
+export const splittableItems = (context) => {
+    const t = context.wavesurfer ? context.wavesurfer.getCurrentTime() : NaN
+    return selectionItems(context).filter(item => {
+        const tm = item.kind !== 'speaker' && itemTimes(context, item)
+        return tm && t > tm.start + MIN_PART_SEC && t < tm.end - MIN_PART_SEC
+    })
+}
+
+// Characters of a word divided at the same fraction as its time span.
+const splitText = (text, frac) => {
+    const chars = [...String(text)]
+    if (chars.length < 2) return [text, text]
+    const k = Math.min(Math.max(Math.round(chars.length * frac), 1), chars.length - 1)
+    return [chars.slice(0, k).join(''), chars.slice(k).join('')]
+}
+
+// Split every selected word / RTTM box that contains the cursor, at the
+// cursor. Both halves stay selected. One undo step.
+export const splitSelection = (context) => {
+    const t = context.wavesurfer.getCurrentTime()
+    const items = splittableItems(context)
+    if (!items.length) return 0
+    const undos = []
+    const newSelection = []
+
+    items.forEach(item => {
+        if (item.kind === 'word') {
+            const w = item.w
+            const region = regionOfWord(context, w)
+            if (!region) return
+            const regionId = region.id
+            const old = { end: w.end, text: w.text }
+            const [head, tail] = splitText(w.text, (t - w.start) / (w.end - w.start))
+            const second = { start: t, end: w.end, text: tail, uuid: uuidv4() }
+            w.end = t
+            w.text = head
+            region.data.words.splice(region.data.words.indexOf(w) + 1, 0, second)
+            fitRegionToWords(region)
+            newSelection.push(item, { kind: 'word', w: second })
+            undos.push(() => {
+                w.end = old.end
+                w.text = old.text
+                const r = context.getRegion(regionId)
+                if (r) {
+                    r.data.words = r.data.words.filter(x => x !== second)
+                    fitRegionToWords(r)
+                }
+            })
+        } else if (item.regionId) {
+            const region = context.getRegion(item.regionId)
+            if (!region) return
+            const oldEnd = region.end
+            const speaker = (region.data.speaker || [])[0]
+            const second = createSegmentRegion(context, region.data.fileIndex, speaker, t, oldEnd)
+            const secondId = second.id
+            region.end = t
+            if (region.data.words && region.data.words.length) region.data.words[region.data.words.length - 1].end = t
+            region.data.regionChanged = true
+            region.updateRender()
+            newSelection.push(item, { kind: 'seg', regionId: secondId })
+            undos.push(() => {
+                deleteRegion(context, context.getRegion(secondId))
+                const r = context.getRegion(item.regionId)
+                if (r) {
+                    r.end = oldEnd
+                    if (r.data.words && r.data.words.length) r.data.words[r.data.words.length - 1].end = oldEnd
+                    r.updateRender()
+                }
+            })
+        } else if (item.ref && context.externalDiarization) {
+            const ref = item.ref
+            const oldEnd = ref.end
+            const second = { speaker: ref.speaker, start: t, end: oldEnd }
+            ref.end = t
+            const list = context.externalDiarization
+            list.splice(list.indexOf(ref) + 1, 0, second)
+            newSelection.push(item, { kind: 'seg', ref: second })
+            undos.push(() => {
+                ref.end = oldEnd
+                const i = list.indexOf(second)
+                if (i >= 0) list.splice(i, 1)
+            })
+        }
+    })
+
+    if (!undos.length) return 0
+    pushUndo(context, () => undos.reverse().forEach(u => u()))
+    context.laneSelection = newSelection
+    refreshTextPanels(context, null)
+    changed(context, null)
+    return undos.length
 }
 
 // ------------------------------------------------------------------ speakers

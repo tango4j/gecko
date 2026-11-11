@@ -108,7 +108,8 @@ export const DEFAULT_USER_CONFIG = {
     showWaveform: true,
     showTranscriptFiles: {},
     showVideo: true,
-    showSubtitles: true
+    showSubtitles: true,
+    snapPx: 6
 }
 export const TRANSCRIPT_EXTENSIONS = ['json', 'ctm', 'rttm', 'srt', 'tsv', 'seglst', 'textgrid']
 

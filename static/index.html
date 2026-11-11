@@ -279,9 +279,9 @@
                 Auto Center
             </button>
 
-            <button class="btn btn-default" ng-click="ctrl.splitSegment()"
-                    title="Split Segment"
-                    ng-disabled="!ctrl.selectedRegion || ctrl.selectedRegion != ctrl.cursorRegion">
+            <button class="btn btn-default" ng-click="ctrl.laneSplit()"
+                    title="Split the selected word / RTTM boxes at the cursor (select a box that contains the cursor)"
+                    ng-disabled="!ctrl.canLaneSplit()">
                 <i class="glyphicon glyphicon-scissors"></i>
             </button>
 
@@ -297,6 +297,13 @@
                 <i class="glyphicon glyphicon-pushpin"></i>
                 Insert
             </button>
+
+            <label class="gk-snap-control"
+                   title="While dragging, box edges within this many pixels of the cursor snap onto it (0 = off)">
+                <i class="glyphicon glyphicon-magnet"></i> Snap
+                <input type="number" min="0" max="30" step="1"
+                       ng-model="ctrl.userConfig.snapPx" ng-change="ctrl.saveUserSettings()"> px
+            </label>
 
 
             <button class="btn btn-default" ng-click="ctrl.historyService.undo(ctrl)" ng-disabled="!ctrl.historyService.undoStack.length"

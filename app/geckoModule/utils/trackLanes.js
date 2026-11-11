@@ -1,7 +1,7 @@
 import { getTracks, markTracksDirty } from './speakerTracks.js'
 import { OPERATION_IDS } from '../constants'
 import { shadeVars } from './palette.js'
-import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker, deleteSelection } from './laneEdits.js'
+import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker, deleteSelection, selectionItems, sameItem } from './laneEdits.js'
 
 // Two lane displays under the waveform, one row per speaker:
 //   #gecko-word-track : a box per word (start..end), text clipped to the box;
@@ -18,6 +18,7 @@ export const MIN_LANE_H = 8
 export const MAX_LANE_H = 120
 
 const MIN_DUR = 0.02
+export const DEFAULT_SNAP_PX = 6
 const HANDLE_PX = 6
 const TEXT_MIN_PX = 12          // narrower word boxes hide their text entirely
 const MIN_FONT_PX = 5           // lanes so thin the text would be under this hide it
@@ -60,24 +61,39 @@ const laneLabels = (speakers, colors, laneH, selected, rowSel) => speakers.map((
 ).join('')
 
 // ---------------------------------------------------------------- selection
-// One click selects a word box or an editable RTTM box; Delete / the trash
-// button removes it (laneEdits.deleteSelection).
+// One click selects a word box or an editable RTTM box (the cursor stays
+// where it is); Shift+click adds / removes boxes. Delete / the trash button
+// removes the selection, the scissors split it at the cursor (laneEdits).
 
-const isSelectedWord = (context, entry) => {
-    const s = context.laneSelection
-    return !!s && s.kind === 'word' && s.w === entry.w
-}
+const isSelectedWord = (context, entry) =>
+    selectionItems(context).some(s => s.kind === 'word' && s.w === entry.w)
 
-const isSelectedSeg = (context, seg) => {
-    const s = context.laneSelection
-    if (!s || s.kind !== 'seg') return false
-    return seg.region ? s.regionId === seg.region.id : (!!seg.ref && s.ref === seg.ref)
-}
+const isSelectedSeg = (context, seg) => selectionItems(context).some(s => s.kind === 'seg' &&
+    (seg.region ? s.regionId === seg.region.id : (!!seg.ref && s.ref === seg.ref)))
 
+// selection: null, one item, or a list of items
 export const setLaneSelection = (context, selection) => {
-    context.laneSelection = selection || null
+    const list = !selection ? [] : (Array.isArray(selection) ? selection : [selection])
+    context.laneSelection = list.length ? list : null
     renderTrackLanes(context, true)
     context.$scope.$evalAsync()
+}
+
+// Shift+click: add the item, or remove it if already selected. A whole
+// speaker selection is replaced rather than mixed with boxes.
+const toggleLaneSelection = (context, item) => {
+    const current = selectionItems(context).filter(s => s.kind !== 'speaker')
+    const i = current.findIndex(s => sameItem(s, item))
+    if (i >= 0) current.splice(i, 1)
+    else current.push(item)
+    setLaneSelection(context, current)
+}
+
+// Snap distance in seconds for the current zoom (0 = snapping off).
+const snapSeconds = (context, pps) => {
+    const raw = context.userConfig ? context.userConfig.snapPx : undefined
+    const px = raw === undefined || raw === null || raw === '' ? DEFAULT_SNAP_PX : +raw
+    return px > 0 && pps > 0 ? px / pps : 0
 }
 
 export const renderTrackLanes = (context, force = false) => {
@@ -123,7 +139,8 @@ export const renderTrackLanes = (context, force = false) => {
     context.laneWords = visibleWords
     word.style.height = `${Math.max(tracks.speakers.length, 1) * wordH}px`
     const selected = currentLaneSpeaker(context)
-    const rowSel = context.laneSelection && context.laneSelection.kind === 'speaker' ? context.laneSelection.speaker : null
+    const rowSelItem = selectionItems(context).find(s => s.kind === 'speaker')
+    const rowSel = rowSelItem ? rowSelItem.speaker : null
     word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
         `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
         laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
@@ -288,7 +305,7 @@ const startDrag = (context, e, body, box, adapter, laneH) => {
     const { start, end } = adapter.get()
     context.trackDrag = {
         adapter, box, mode, body, laneH, pps: g.pps, x0: e.clientX, y0: e.clientY, moved: false,
-        start0: start, end0: end, speaker: adapter.speaker, shownSpeaker: adapter.speaker, ...adapter.limits(),
+        start0: start, end0: end, speaker: adapter.speaker, shownSpeaker: adapter.speaker, shift: e.shiftKey, ...adapter.limits(),
         label: body.querySelector('.gk-drag-label')
     }
     box.classList.add('dragging')
@@ -424,7 +441,7 @@ export const initTrackLanes = (context) => {
             startDrag(context, e, diar, diar.querySelector(`.gk-seg[data-k="${box.dataset.k}"]`), segAdapter(context, seg), laneH)
             return
         }
-        const t = seg ? seg.start : timeAtClientX(context, e.clientX, diar)
+        const t = timeAtClientX(context, e.clientX, diar)
         if (t !== null) context.seek(t)
         // silence in a speaker's row selects that speaker; a read-only box just seeks
         setLaneSelection(context, !seg && rowSpeaker ? { kind: 'speaker', speaker: rowSpeaker } : null)
@@ -459,13 +476,34 @@ export const initTrackLanes = (context) => {
                 d.box.style.cssText += shadeVars(getTracks(context).colors[d.speaker])
             }
         }
+        // snap the dragged edge(s) to the cursor when within the snap distance
+        let snapped = false
+        const snap = snapSeconds(context, d.pps)
+        if (snap) {
+            const c = context.wavesurfer.getCurrentTime()
+            if (d.mode === 'start') {
+                if (Math.abs(s - c) <= snap && c < en - MIN_DUR) { s = c; snapped = true }
+            } else if (d.mode === 'end') {
+                if (Math.abs(en - c) <= snap && c > s + MIN_DUR) { en = c; snapped = true }
+            } else {
+                const ds = c - s
+                const de = c - en
+                const shift = Math.abs(ds) <= Math.abs(de) ? ds : de
+                if (Math.abs(shift) <= snap && s + shift >= d.lo && en + shift <= d.hi) {
+                    s += shift
+                    en += shift
+                    snapped = true
+                }
+            }
+        }
+        d.box.classList.toggle('snapped', snapped)
         d.adapter.set(s, en)
         d.box.style.left = `${s * d.pps}px`
         d.box.style.width = `${Math.max((en - s) * d.pps, 1)}px`
         if (d.label) {
             d.label.hidden = false
             const who = d.speaker !== d.adapter.speaker ? `→ ${d.speaker}  ` : ''
-            d.label.textContent = `${who}${d.adapter.label}  ${fmt(s)} – ${fmt(en)} s`
+            d.label.textContent = `${who}${d.adapter.label}  ${fmt(s)} – ${fmt(en)} s${snapped ? '  ⇥ cursor' : ''}`
             d.label.style.left = `${en * d.pps + context.trackShift + 4}px`
             d.label.style.top = d.box.style.top
         }
@@ -475,7 +513,7 @@ export const initTrackLanes = (context) => {
         const d = context.trackDrag
         if (!d) return
         context.trackDrag = null
-        d.box.classList.remove('dragging')
+        d.box.classList.remove('dragging', 'snapped')
         if (d.label) d.label.hidden = true
         const now = d.adapter.get()
         const timeChanged = Math.abs(now.start - d.start0) > 1e-9 || Math.abs(now.end - d.end0) > 1e-9
@@ -487,11 +525,13 @@ export const initTrackLanes = (context) => {
             } else if (timeChanged) {
                 d.adapter.commit(d.start0, d.end0)
             }
-            context.laneSelection = d.adapter.selection()
+            const item = d.adapter.selection()
+            if (!selectionItems(context).some(s => sameItem(s, item))) context.laneSelection = [item]
         } else if (!d.moved) {
-            // one click: select the box (and move the cursor to it)
-            context.seek(d.adapter.get().start)
-            setLaneSelection(context, d.adapter.selection())
+            // one click selects the box; the cursor stays where it is (so a
+            // split lands exactly where the cursor was placed)
+            if (d.shift) toggleLaneSelection(context, d.adapter.selection())
+            else setLaneSelection(context, d.adapter.selection())
         }
         if (d.moved) renderTrackLanes(context, true)
         context.$scope.$evalAsync()
@@ -500,7 +540,7 @@ export const initTrackLanes = (context) => {
     window.addEventListener('resize', () => { context.trackRenderKey = null })
 
     document.addEventListener('keydown', (e) => {
-        if (!context.laneSelection) return
+        if (!selectionItems(context).length) return
         const t = e.target
         const typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|EDITABLE-WORDS)$/.test(t.tagName))
         if (typing) return

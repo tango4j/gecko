@@ -1239,3 +1239,34 @@ body.gk-resizing * {
 .gk-add-speaker .glyphicon {
     font-size: 9px;
 }
+
+/* edge snapped to the cursor while dragging */
+.gk-word.snapped,
+.gk-seg.snapped {
+    outline: 2px solid #ffffff;
+    outline-offset: 1px;
+}
+
+/* snap-to-cursor distance in the control panel */
+.gk-snap-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 0 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #555;
+    vertical-align: middle;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fafafa;
+}
+
+.gk-snap-control input {
+    width: 44px;
+    padding: 1px 3px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
