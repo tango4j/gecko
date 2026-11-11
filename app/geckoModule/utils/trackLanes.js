@@ -92,6 +92,16 @@ const toggleLaneSelection = (context, item) => {
     setLaneSelection(context, current)
 }
 
+// Plain click: select the item, or release it if it is already selected.
+const selectOrRelease = (context, item) => {
+    const current = selectionItems(context)
+    if (current.some(s => sameItem(s, item))) {
+        setLaneSelection(context, current.filter(s => !sameItem(s, item)))
+    } else {
+        setLaneSelection(context, item)
+    }
+}
+
 // Snap distance in seconds for the current zoom (0 = snapping off).
 const snapSeconds = (context, pps) => {
     const raw = context.userConfig ? context.userConfig.snapPx : undefined
@@ -371,6 +381,76 @@ const startDrag = (context, e, body, box, adapter, laneH) => {
     box.classList.add('dragging')
 }
 
+// ---------------------------------------------------------------- waveform edge handles
+// The speaker-colored selection boxes over the waveform have start / end
+// handles; dragging one edits the same word / RTTM box as the lanes do.
+
+export const adapterForItem = (context, item) => {
+    const tracks = getTracks(context)
+    if (item.kind === 'word') {
+        const entry = tracks.words.find(x => x.w === item.w)
+        return entry ? wordAdapter(context, entry) : null
+    }
+    if (item.kind === 'seg' && tracks.diarEditable) {
+        const seg = tracks.diar.find(x => (item.regionId && x.region && x.region.id === item.regionId) || (item.ref && x.ref === item.ref))
+        return seg ? segAdapter(context, seg) : null
+    }
+    return null
+}
+
+export const startWaveEdgeDrag = (context, item, edge, e) => {
+    const adapter = adapterForItem(context, item)
+    const g = geometry(context)
+    if (!adapter || !g) return false
+    const { start, end } = adapter.get()
+    context.waveDrag = { adapter, edge, x0: e.clientX, pps: g.pps, start0: start, end0: end, moved: false, duration: g.duration }
+    document.body.classList.add('gk-wave-dragging')
+    return true
+}
+
+const waveDragMove = (context, e) => {
+    const d = context.waveDrag
+    if (!d.moved && Math.abs(e.clientX - d.x0) < 2) return
+    d.moved = true
+    const dt = (e.clientX - d.x0) / d.pps
+    let s = d.start0
+    let en = d.end0
+    if (d.edge === 'start') s = Math.min(Math.max(d.start0 + dt, 0), d.end0 - MIN_DUR)
+    else en = Math.max(Math.min(d.end0 + dt, d.duration), d.start0 + MIN_DUR)
+    // same snapping as in the lanes: cursor or the speaker's neighbouring edges
+    const snap = snapSeconds(context, d.pps)
+    if (snap) {
+        d.edges = d.edges || d.adapter.edgesFor(d.adapter.speaker)
+        const cursorT = context.wavesurfer.getCurrentTime()
+        const v = d.edge === 'start' ? s : en
+        let best = { t: cursorT, dist: Math.abs(v - cursorT) }
+        for (const t of d.edges) { const dist = Math.abs(v - t); if (dist < best.dist) best = { t, dist } }
+        if (best.dist <= snap) {
+            if (d.edge === 'start' && best.t < en - MIN_DUR) s = best.t
+            if (d.edge === 'end' && best.t > s + MIN_DUR) en = best.t
+        }
+    }
+    d.adapter.set(s, en)
+    renderTrackLanes(context, true)
+}
+
+const waveDragEnd = (context) => {
+    const d = context.waveDrag
+    context.waveDrag = null
+    document.body.classList.remove('gk-wave-dragging')
+    const now = d.adapter.get()
+    if (d.moved && (Math.abs(now.start - d.start0) > 1e-9 || Math.abs(now.end - d.end0) > 1e-9)) {
+        d.adapter.commit(d.start0, d.end0)
+    }
+    if (d.moved) {
+        // the mouseup is followed by a click on the waveform: don't let it seek
+        context.suppressWaveClick = true
+        setTimeout(() => { context.suppressWaveClick = false }, 0)
+    }
+    renderTrackLanes(context, true)
+    context.$scope.$evalAsync()
+}
+
 // ---------------------------------------------------------------- text editor
 
 const openWordEditor = (context, entry) => {
@@ -462,7 +542,7 @@ export const initTrackLanes = (context) => {
         if (label) {
             // speaker name on the far left: select the whole speaker
             e.preventDefault()
-            setLaneSelection(context, { kind: 'speaker', speaker: label.dataset.speaker })
+            selectOrRelease(context, { kind: 'speaker', speaker: label.dataset.speaker })
             return
         }
         const box = e.target.closest('.gk-word')
@@ -471,7 +551,8 @@ export const initTrackLanes = (context) => {
             // silence in a speaker's row: move the cursor and select that speaker
             const t = timeAtClientX(context, e.clientX, word)
             if (t !== null) context.seek(t)
-            setLaneSelection(context, rowSpeaker ? { kind: 'speaker', speaker: rowSpeaker } : null)
+            if (rowSpeaker) selectOrRelease(context, { kind: 'speaker', speaker: rowSpeaker })
+            else setLaneSelection(context, null)
             return
         }
         e.preventDefault()
@@ -491,7 +572,7 @@ export const initTrackLanes = (context) => {
         const label = e.target.closest('.gk-lane-label')
         if (label) {
             e.preventDefault()
-            setLaneSelection(context, { kind: 'speaker', speaker: label.dataset.speaker })
+            selectOrRelease(context, { kind: 'speaker', speaker: label.dataset.speaker })
             return
         }
         const box = e.target.closest('.gk-seg')
@@ -504,10 +585,12 @@ export const initTrackLanes = (context) => {
         const t = timeAtClientX(context, e.clientX, diar)
         if (t !== null) context.seek(t)
         // silence in a speaker's row selects that speaker; a read-only box just seeks
-        setLaneSelection(context, !seg && rowSpeaker ? { kind: 'speaker', speaker: rowSpeaker } : null)
+        if (!seg && rowSpeaker) selectOrRelease(context, { kind: 'speaker', speaker: rowSpeaker })
+        else setLaneSelection(context, null)
     })
 
     window.addEventListener('mousemove', (e) => {
+        if (context.waveDrag) return waveDragMove(context, e)
         const d = context.trackDrag
         if (!d) return
         if (!d.moved && Math.abs(e.clientX - d.x0) < 3 && Math.abs(e.clientY - d.y0) < 3) return
@@ -613,7 +696,16 @@ export const initTrackLanes = (context) => {
         }
     })
 
+    window.addEventListener('click', (e) => {
+        if (context.suppressWaveClick) {
+            context.suppressWaveClick = false
+            e.stopPropagation()
+            e.preventDefault()
+        }
+    }, true)
+
     window.addEventListener('mouseup', () => {
+        if (context.waveDrag) return waveDragEnd(context)
         const d = context.trackDrag
         if (!d) return
         context.trackDrag = null
@@ -648,7 +740,7 @@ export const initTrackLanes = (context) => {
             // one click selects the box; the cursor stays where it is (so a
             // split lands exactly where the cursor was placed)
             if (d.shift) toggleLaneSelection(context, d.adapter.selection())
-            else setLaneSelection(context, d.adapter.selection())
+            else selectOrRelease(context, d.adapter.selection())
         }
         if (d.moved) renderTrackLanes(context, true)
         context.$scope.$evalAsync()
