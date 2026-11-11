@@ -26,6 +26,7 @@ const HANDLE_PX = 6
 const TEXT_MIN_PX = 12          // narrower word boxes hide their text entirely
 const MIN_FONT_PX = 5           // lanes so thin the text would be under this hide it
 const CULL_MARGIN_PX = 200
+const SILENCE_COLOR = '#7f858d'
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 const esc = (s) => String(s).replace(/[&<>"']/g, c => HTML_ESCAPES[c])
@@ -55,12 +56,12 @@ const els = () => ({
     diar: document.querySelector('#gecko-diar-track .gecko-track-body')
 })
 
-const laneScaffold = (speakers, colors, laneH, selected, rowSel) => speakers.map((s, i) =>
-    `<div class="gk-lane${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" style="top:${i * laneH}px;height:${laneH}px;${shadeVars(colors[s])}"></div>`
+const laneScaffold = (speakers, colors, laneH, selected, rowSel, off = 0) => speakers.map((s, i) =>
+    `<div class="gk-lane${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" style="top:${off + i * laneH}px;height:${laneH}px;${shadeVars(colors[s])}"></div>`
 ).join('')
 
-const laneLabels = (speakers, colors, laneH, selected, rowSel) => speakers.map((s, i) =>
-    `<div class="gk-lane-label${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" data-speaker="${esc(s)}" title="Click to select ${esc(s)} (Delete removes the whole speaker)" style="top:${i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
+const laneLabels = (speakers, colors, laneH, selected, rowSel, off = 0) => speakers.map((s, i) =>
+    `<div class="gk-lane-label${s === selected ? ' selected' : ''}${s === rowSel ? ' row-selected' : ''}" data-speaker="${esc(s)}" title="Click to select ${esc(s)} (Delete removes the whole speaker)" style="top:${off + i * laneH}px;height:${laneH}px;line-height:${laneH}px;${shadeVars(colors[s])}">${esc(s)}</div>`
 ).join('')
 
 // ---------------------------------------------------------------- selection
@@ -133,33 +134,65 @@ export const renderTrackLanes = (context, force = false) => {
     tracks.speakers.forEach((s, i) => { laneOf[s] = i })
     const pad = (h) => (h >= 12 ? 2 : 1)
 
+    // only the loaded formats get a display
+    const wordTrack = document.getElementById('gecko-word-track')
+    const diarTrack = document.getElementById('gecko-diar-track')
+    if (wordTrack) wordTrack.style.display = tracks.showWords ? '' : 'none'
+    if (diarTrack) diarTrack.style.display = tracks.showDiar ? '' : 'none'
+    // one "+ Speaker" button, on the first display shown
+    const diarAdd = document.querySelector('#gecko-diar-track .gk-add-speaker-diar')
+    if (diarAdd) diarAdd.style.display = tracks.showWords ? 'none' : ''
+
     // ---- word lane ----
+    // Utterance-level TextGrids look like the RTTM display: one filled
+    // segment per utterance with its text, a row per speaker, and the
+    // silence intervals (<S>, <Z>, ...) in their own row on top.
+    const utt = tracks.wordUnit === 'utterance'
+    const silRow = utt && tracks.silence.length > 0
+    const off = silRow ? wordH : 0
+    context.wordRowOffset = off
     const visibleWords = []
     let boxes = ''
+    if (silRow) {
+        tracks.silence.forEach(x => {
+            if (x.end < t0 || x.start > t1) return
+            const width = Math.max((x.end - x.start) * g.pps, 1)
+            const boxH = wordH - 2 * pad(wordH)
+            const fontPx = Math.round(boxH / 3 * 10) / 10
+            const label = x.text || 'silence'
+            const title = `${label}  [silence]\n${fmt(x.start)} – ${fmt(x.end)} s  (${fmt(x.end - x.start)} s)`
+            boxes += `<div class="gk-sil-seg" style="left:${x.start * g.pps}px;width:${width}px;top:${pad(wordH)}px;height:${boxH}px;font-size:${fontPx}px;line-height:${Math.max(boxH - 2, 1)}px" title="${esc(title)}"><span>${width > fontPx * 2 ? esc(label) : ''}</span></div>`
+        })
+    }
     tracks.words.forEach(entry => {
         const w = entry.w
         if (w.end < t0 || w.start > t1) return
         const k = visibleWords.push(entry) - 1
         const left = w.start * g.pps
         const width = Math.max((w.end - w.start) * g.pps, 1)
-        const top = laneOf[entry.speaker] * wordH + pad(wordH)
+        const top = off + laneOf[entry.speaker] * wordH + pad(wordH)
         // text height follows the box: font size = a third of the box height
         const boxH = wordH - 2 * pad(wordH)
         const fontPx = Math.round(boxH / 3 * 10) / 10
         let cls = width < Math.max(TEXT_MIN_PX, fontPx * 1.2) || fontPx < MIN_FONT_PX ? 'gk-word notext' : 'gk-word'
+        if (utt) cls += ' gk-utt'
         if (isSelectedWord(context, entry)) cls += ' selected'
-        const title = `${w.text}  [${entry.speaker}]\n${fmt(w.start)} – ${fmt(w.end)} s  (${fmt(w.end - w.start)} s)`
+        const title = `${w.text || '(no transcription)'}  [${entry.speaker}]\n${fmt(w.start)} – ${fmt(w.end)} s  (${fmt(w.end - w.start)} s)`
         boxes += `<div class="${cls}" data-k="${k}" style="left:${left}px;width:${width}px;top:${top}px;height:${boxH}px;font-size:${fontPx}px;line-height:${Math.max(boxH - 2, 1)}px;${shadeVars(tracks.colors[entry.speaker])}" title="${esc(title)}"><span>${esc(w.text)}</span></div>`
     })
     context.laneWords = visibleWords
-    word.style.height = `${Math.max(tracks.speakers.length, 1) * wordH}px`
+    word.style.height = `${off + Math.max(tracks.speakers.length, 1) * wordH}px`
     const selected = currentLaneSpeaker(context)
     const rowSelItem = selectionItems(context).find(s => s.kind === 'speaker')
     const rowSel = rowSelItem ? rowSelItem.speaker : null
-    word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
+    const silScaffold = silRow
+        ? `<div class="gk-lane gk-sil-lane" style="top:0;height:${wordH}px;${shadeVars(SILENCE_COLOR)}"></div>` : ''
+    const silLabel = silRow
+        ? `<div class="gk-lane-label gk-sil-label" title="Silence intervals of the TextGrid (no speaker label)" style="top:0;height:${wordH}px;line-height:${wordH}px;${shadeVars(SILENCE_COLOR)}">&lt;S&gt;</div>` : ''
+    word.innerHTML = silScaffold + laneScaffold(tracks.speakers, tracks.colors, wordH, selected, rowSel, off) +
         `<div class="gk-lane-clip"><div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div></div>' +
-        laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel)
+        silLabel + laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel, off)
 
     // ---- RTTM / diarization lane ----
     const visibleSegs = []
@@ -182,11 +215,16 @@ export const renderTrackLanes = (context, force = false) => {
         '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div></div>' +
         laneLabels(tracks.speakers, tracks.colors, diarH, selected, rowSel)
 
-    const wordTitle = document.querySelector('#gecko-word-track .gecko-track-source')
-    const diarTitle = document.querySelector('#gecko-diar-track .gecko-track-source')
-    const diarHint = document.querySelector('#gecko-diar-track .gecko-track-hint')
-    if (wordTitle) wordTitle.textContent = tracks.wordSource || ''
-    if (diarTitle) diarTitle.textContent = tracks.diarSource === 'turns' ? 'derived from speaker turns (read-only)' : tracks.diarSource
+    const q = (sel) => document.querySelector(sel)
+    const setText = (sel, text) => { const el = q(sel); if (el) el.textContent = text }
+    setText('#gecko-word-track .gecko-track-format', tracks.wordFormat || 'Words')
+    setText('#gecko-word-track .gecko-track-kind', tracks.wordUnit === 'utterance'
+        ? `utterances${tracks.silence.length ? ' + silence' : ''}` : 'word timestamps')
+    setText('#gecko-word-track .gecko-track-source', tracks.wordSource || '')
+    setText('#gecko-diar-track .gecko-track-format', tracks.diarFormat || 'RTTM')
+    setText('#gecko-diar-track .gecko-track-kind', 'speaker segments')
+    setText('#gecko-diar-track .gecko-track-source', tracks.diarSource || '')
+    const diarHint = q('#gecko-diar-track .gecko-track-hint')
     const target = document.querySelector('#gecko-word-track .gecko-track-target')
     if (target) target.textContent = `insert → ${selected}`
     if (diarHint) {
@@ -300,9 +338,17 @@ const timeAtClientX = (context, clientX, body) => {
     return Math.min(Math.max(x / g.pps, 0), g.duration)
 }
 
+// Height above the first speaker row: the silence row of an utterance-level
+// TextGrid sits on top of the word display.
+const rowOffset = (context, body) =>
+    body && body.closest && body.closest('#gecko-word-track') ? (context.wordRowOffset || 0) : 0
+
+// Speaker row under clientY (null inside the silence row).
 const laneAtClientY = (context, body, clientY, laneH) => {
     const speakers = getTracks(context).speakers
-    const i = Math.floor((clientY - body.getBoundingClientRect().top) / laneH)
+    const y = clientY - body.getBoundingClientRect().top - rowOffset(context, body)
+    if (y < 0 && rowOffset(context, body) > 0) return null
+    const i = Math.floor(y / laneH)
     return speakers[Math.min(Math.max(i, 0), speakers.length - 1)]
 }
 
@@ -541,6 +587,12 @@ export const initTrackLanes = (context) => {
         const rowSpeaker = laneAtClientY(context, word, e.clientY, laneH)
         selectLane(context, rowSpeaker)
         const label = e.target.closest('.gk-lane-label')
+        if (label && !label.dataset.speaker) {
+            // the <S> silence row label: nothing to select
+            e.preventDefault()
+            setLaneSelection(context, null)
+            return
+        }
         if (label) {
             // speaker name on the far left: select the whole speaker
             e.preventDefault()
@@ -616,7 +668,7 @@ export const initTrackLanes = (context) => {
             d.speaker = speakers[d.idx0 + d.laneDelta]
             const i = d.idx0 + d.laneDelta
             const pad = d.laneH >= 12 ? 2 : 1
-            d.box.style.top = `${i * d.laneH + pad}px`
+            d.box.style.top = `${rowOffset(context, d.body) + i * d.laneH + pad}px`
             if (d.speaker !== d.shownSpeaker) {
                 d.shownSpeaker = d.speaker
                 d.box.classList.toggle('to-other-speaker', d.speaker !== d.adapter.speaker)
@@ -676,7 +728,7 @@ export const initTrackLanes = (context) => {
                     m.box.style.left = `${ms * d.pps}px`
                     m.box.style.width = `${Math.max((me - ms) * d.pps, 1)}px`
                     const pad = m.laneH >= 12 ? 2 : 1
-                    m.box.style.top = `${speakers.indexOf(m.speaker) * m.laneH + pad}px`
+                    m.box.style.top = `${rowOffset(context, m.body) + speakers.indexOf(m.speaker) * m.laneH + pad}px`
                     if (m.speaker !== m.shownSpeaker) {
                         m.shownSpeaker = m.speaker
                         m.box.classList.toggle('to-other-speaker', m.speaker !== m.adapter.speaker)

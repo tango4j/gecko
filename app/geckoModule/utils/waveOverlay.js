@@ -63,13 +63,14 @@ const selectedSpans = (context, tracks) => {
                 out.push([live ? live.start : seg.start, live ? live.end : seg.end, seg.speaker, tracks.diarEditable ? item : null])
             }
         } else if (item.kind === 'speaker') {
-            (tracks.diarBySpeaker[item.speaker] || []).forEach(d => out.push([d.start, d.end, item.speaker, null]))
+            const segs = tracks.showDiar ? tracks.diarBySpeaker[item.speaker] : tracks.turnsBySpeaker[item.speaker]
+            ;(segs || []).forEach(d => out.push([d.start, d.end, item.speaker, null]))
         }
     })
     return out
 }
 
-const playingSpans = (context, tracks, time) => tracks.diar
+const playingSpans = (context, tracks, time) => (tracks.showDiar ? tracks.diar : tracks.turns)
     .filter(d => time >= d.start && time <= d.end)
     .map(d => [d.start, d.end, d.speaker])
 

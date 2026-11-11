@@ -82,6 +82,9 @@
                         <li><a href="#" ng-click="ctrl.saveClient('seglst.json')">
                             SegLST
                         </a></li>
+                        <li><a href="#" ng-click="ctrl.saveClient('TextGrid')">
+                            TextGrid
+                        </a></li>
                         <li><a href="#" ng-click="ctrl.saveDiscrepancyResults()" ng-if="ctrl.discrepancies">
                             Annotations
                         </a></li>
@@ -159,11 +162,11 @@
         <div id="gecko-tracks" ng-show="ctrl.ready && ctrl.userConfig.showWaveform">
             <div class="gecko-track" id="gecko-word-track">
                 <div class="gecko-track-header">
-                    <b>Words</b> <span class="gecko-track-source"></span>
+                    <b class="gecko-track-format">Words</b> <span class="gecko-track-kind"></span> <span class="gecko-track-source"></span>
                     <span class="gecko-track-target"></span>
                     <span class="gecko-track-hint">drag edges to adjust start/end, drag the body to move it or onto another speaker's row, double-click to edit text</span>
                     <button type="button" class="gk-add-speaker" ng-click="ctrl.laneAddSpeaker()"
-                            title="Add an empty speaker row to the Words and RTTM views">
+                            title="Add an empty speaker row">
                         <i class="glyphicon glyphicon-plus"></i> Speaker
                     </button>
                 </div>
@@ -172,8 +175,12 @@
             </div>
             <div class="gecko-track" id="gecko-diar-track">
                 <div class="gecko-track-header">
-                    <b>RTTM</b> <span class="gecko-track-source"></span>
+                    <b class="gecko-track-format">RTTM</b> <span class="gecko-track-kind"></span> <span class="gecko-track-source"></span>
                     <span class="gecko-track-hint"></span>
+                    <button type="button" class="gk-add-speaker gk-add-speaker-diar" ng-click="ctrl.laneAddSpeaker()"
+                            title="Add an empty speaker row">
+                        <i class="glyphicon glyphicon-plus"></i> Speaker
+                    </button>
                 </div>
                 <div class="gecko-track-body"></div>
                 <div class="gk-resizer" data-resize="rttm" title="Drag to resize the RTTM lanes"></div>

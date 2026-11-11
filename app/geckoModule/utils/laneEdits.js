@@ -236,7 +236,11 @@ export const insertAtCursor = (context) => {
 export const setWordText = (context, entry, text) => {
     const w = entry.w
     const region = entry.region
-    const tokens = String(text).trim().split(/\s+/).filter(Boolean)
+    // utterance boxes (speaker-annotated TextGrid) keep the whole text
+    const file = (context.filesData || [])[region.data.fileIndex]
+    const utterance = !!(file && file.formatInfo && file.formatInfo.unit === 'utterance')
+    const trimmed = String(text).trim()
+    const tokens = utterance ? (trimmed ? [trimmed.replace(/\s+/g, ' ')] : []) : trimmed.split(/\s+/).filter(Boolean)
     if (tokens.length === 1 && tokens[0] === w.text) return
 
     if (!tokens.length) {

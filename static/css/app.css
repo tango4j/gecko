@@ -867,6 +867,13 @@ a.play-part.play-part-clear{
     font-size: 10px;
 }
 
+/* the format name is shown as written: TextGrid, CTM, RTTM */
+.gecko-track-header b.gecko-track-format {
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: 11px;
+}
+
 .gecko-track-source {
     color: var(--track-dim);
     overflow: hidden;
@@ -1412,4 +1419,39 @@ body.gk-wave-dragging * {
 /* PLAY SEGMENT while looping over the selection */
 .btn.gk-looping {
     box-shadow: 0 0 0 2px #ffffff, 0 0 10px rgba(118, 185, 0, 0.9);
+}
+
+/* utterance-level TextGrid: filled segments with text, like the RTTM display */
+.gk-word.gk-utt {
+    background: color-mix(in srgb, var(--label) 70%, transparent);
+    border: 1px solid var(--label);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    color: #101418;
+    font-weight: 600;
+    border-radius: 3px;
+}
+.gk-word.gk-utt > span {
+    text-shadow: none;
+}
+
+/* silence row on top (<S>, <Z>, ... intervals with no speaker label) */
+.gk-sil-seg {
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 0 3px;
+    border-radius: 3px;
+    color: #c9d0d8;
+    border: 1px dashed rgba(170, 178, 188, 0.6);
+    background: repeating-linear-gradient(135deg, rgba(150, 158, 170, 0.28) 0 4px, rgba(150, 158, 170, 0.1) 4px 8px);
+}
+.gk-sil-label {
+    font-style: italic;
+}
+.gecko-track-kind {
+    color: #8a93a0;
+    font-size: 11px;
+    margin-right: 4px;
 }

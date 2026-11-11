@@ -20,7 +20,8 @@ export const selectionSpans = (context) => {
             const live = item.regionId ? context.getRegion(item.regionId) : item.ref
             if (live) spans.push([live.start, live.end])
         } else if (item.kind === 'speaker') {
-            (tracks.diarBySpeaker[item.speaker] || []).forEach(d => spans.push([d.start, d.end]))
+            const segs = tracks.showDiar ? tracks.diarBySpeaker[item.speaker] : tracks.turnsBySpeaker[item.speaker]
+            ;(segs || []).forEach(d => spans.push([d.start, d.end]))
         }
     })
     return spans

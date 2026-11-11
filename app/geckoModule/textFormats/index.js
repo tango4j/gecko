@@ -5,7 +5,7 @@ import { parse as parseRTTM, convert as convertRTTM } from './rttm'
 // import { parse as parseTSV, convert as convertTSV } from './tsv'
 import { parse as parseJSON, convert as convertJSON } from './json'
 import { parse as parseSRT, convert as convertSRT } from './srt'
-import { parse as parseTextGrid } from './textgrid'
+import { parse as parseTextGrid, convert as convertTextGrid } from './textgrid'
 import {
     parse as parseSegLST,
     convert as convertSegLST,
@@ -72,6 +72,9 @@ const convert = (format, parent, parserOptions, ...args) => {
             return (fileIndex) => convertCTM(parent, fileIndex, parserOptions)
         case 'srt':
             return (fileIndex) => convertSRT(parent, fileIndex, parserOptions)
+        case 'textgrid':
+        case 'TextGrid':
+            return (fileIndex) => convertTextGrid(parent, fileIndex, parserOptions)
         case 'seglst':
         case 'seglst.json':
             return (fileIndex) => convertSegLST(parent, fileIndex, parserOptions)

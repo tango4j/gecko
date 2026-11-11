@@ -6,6 +6,7 @@
 // everywhere. The model is rebuilt lazily when `context.tracksDirty` is set.
 
 import { SPEAKER_COLORS } from '../constants'
+import { formatName } from './formatNames.js'
 
 const FALLBACK_COLORS = SPEAKER_COLORS
 
@@ -59,6 +60,11 @@ const buildTracks = (context) => {
     const diar = []           // { speaker, start, end }
     const wIndex = wordFileIndex(context)
     const rIndex = rttmFileIndex(context)
+    const wFile = wIndex >= 0 ? context.filesData[wIndex] : null
+    const wInfo = (wFile && wFile.formatInfo) || {}
+    // utterance-level files (speaker-annotated TextGrid): one box per
+    // interval holding the whole transcription, which may be empty
+    const wordUnit = wInfo.unit === 'utterance' ? 'utterance' : 'word'
 
     if (wIndex >= 0) {
         context.iterateRegions(region => {
@@ -67,7 +73,7 @@ const buildTracks = (context) => {
             speakers.forEach(speaker => turns.push({ speaker, start: region.start, end: region.end, region }))
             // A word belongs to the first speaker of its region (normally the only one).
             ;(region.data.words || []).forEach(w => {
-                if (!w || !String(w.text || '').trim()) return
+                if (!w || (wordUnit === 'word' && !String(w.text || '').trim())) return
                 if (typeof w.start !== 'number' || typeof w.end !== 'number') return
                 words.push({ speaker: speakers[0], w, region })
             })
@@ -77,22 +83,25 @@ const buildTracks = (context) => {
     // diar entries: { speaker, start, end, region?, ref? }
     //   region: a Gecko region of a loaded .rttm file (edits go to the region)
     //   ref:    a TextGrid diarization interval (edits go to that object)
-    // Segments derived from the word file's turns are read-only.
-    let diarSource = 'turns'
+    // Only loaded formats get a display: without an .rttm (or TextGrid
+    // speaker-activity tiers) there is no RTTM display at all.
+    let diarSource = ''
+    let diarFormat = ''
     let diarEditable = false
     if (rIndex >= 0) {
         diarSource = context.filesData[rIndex].filename
+        diarFormat = 'RTTM'
         diarEditable = true
         context.iterateRegions(region => {
             if (region.data.isDummy) return
             regionSpeakers(region).forEach(speaker => diar.push({ speaker, start: region.start, end: region.end, region }))
         }, rIndex)
     } else if (context.externalDiarization && context.externalDiarization.length) {
-        diarSource = 'TextGrid diarization tiers'
+        const tg = (context.filesData || []).find(f => formatName(f.filename) === 'TextGrid')
+        diarSource = tg ? tg.filename : 'TextGrid'
+        diarFormat = 'TextGrid'
         diarEditable = true
         context.externalDiarization.forEach(d => diar.push({ speaker: d.speaker, start: d.start, end: d.end, ref: d }))
-    } else {
-        turns.forEach(t => diar.push({ speaker: t.speaker, start: t.start, end: t.end }))
     }
 
     const speakerSet = new Set()
@@ -119,8 +128,18 @@ const buildTracks = (context) => {
     speakers.forEach(sp => { diarBySpeaker[sp] = [] })
     diar.forEach(d => { if (diarBySpeaker[d.speaker]) diarBySpeaker[d.speaker].push(d) })
 
+    const silence = (wInfo.silence || []).slice().sort((a, b) => a.start - b.start)
+    const hasWords = !!wFile && wInfo.unit !== 'activity'
+
     return {
         speakers,
+        turns,
+        silence,
+        wordUnit,
+        showWords: hasWords,
+        showDiar: diar.length > 0 || rIndex >= 0 || !!(context.externalDiarization && context.externalDiarization.length),
+        wordFormat: hasWords ? formatName(wFile.filename) : '',
+        diarFormat,
         colors,
         words,
         wordsBySpeaker,

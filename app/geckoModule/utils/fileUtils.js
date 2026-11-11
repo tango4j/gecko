@@ -1,4 +1,5 @@
 import { attachVideo, isVideoFile } from './videoSubtitles.js'
+import { formatName } from './formatNames.js'
 
 import { getCurrentTimeStamp, formatTime } from './index.js'
 
@@ -87,12 +88,33 @@ export const parseServerResponse = (context, serverConfig, res) => {
     }
 }
 
+// Toast naming the format of every loaded transcript file.
+const notifyFormat = (context, file) => {
+    if (!context.toaster) return
+    const name = formatName(file.filename)
+    const info = file.formatInfo
+    let body = file.filename
+    if (info && info.unit === 'utterance') {
+        body += ` — speaker labels (${info.speakers.join(', ')}) with transcription; ${info.silence.length} silence intervals`
+    } else if (info && info.unit === 'activity') {
+        body += ` — speaker activity (${info.speakers.join(', ')})`
+    }
+    context.formatNotices = (context.formatNotices || []).concat(`${name} loaded: ${body}`)
+    context.toaster.pop({ type: 'info', title: `${name} loaded`, body, timeout: 8000 })
+    if (context.$scope) context.$scope.$evalAsync()
+}
+
 const parseFileData = (context, fileName, fileData, fileS3Subfolder = null) => {
     const fileNameClean = fileName.split('?')[0]
+    context.lastParseInfo = null
     const data = context.handleTextFormats(fileNameClean, fileData)
     const parsedData = Array.isArray(data) ? data[0] : data
     const parsedColors = Array.isArray(data) && data.length > 1 ? data[1] : null
     const file = { filename: fileNameClean, fullFilename: fileName, data: parsedData }
+    // what the loader found (TextGrid: utterance boxes + silence spans, ...)
+    file.formatInfo = context.lastParseInfo || null
+    context.lastParseInfo = null
+    notifyFormat(context, file)
     if (fileS3Subfolder) {
         file.s3Subfolder = fileS3Subfolder
     }
@@ -104,6 +126,7 @@ export const parseAndLoadText = async (context, res) => {
     context.filesData = []
     context.externalDiarization = null
     context.laneSelection = null
+    context.formatNotices = []
 
     return new Promise(async (resolve) => {
         const promises = res.segmentsFiles.map(async (f) => await readTextFile(f))

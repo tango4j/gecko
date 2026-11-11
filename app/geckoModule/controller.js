@@ -106,7 +106,7 @@ class MainController {
 
             const audio = urlParams.get('audio')
 
-            let transcriptParams = ['rttm', 'tsv', 'json', 'ctm', 'srt', 'transcript']
+            let transcriptParams = ['rttm', 'tsv', 'json', 'ctm', 'srt', 'textgrid', 'transcript']
             transcriptParams = transcriptParams.map((f) => {
                 return urlParams.get(f)
             }).filter(Boolean)
@@ -1713,7 +1713,7 @@ class MainController {
                 // compound extension `.seglst.json`) before re-attaching the
                 // target one.
                 var stripped = current.filename.replace(
-                    /\.(seglst\.json|seglst|json|rttm|ctm|srt|tsv)$/i,
+                    /\.(seglst\.json|seglst|json|rttm|ctm|srt|tsv|textgrid)$/i,
                     ''
                 );
                 if (stripped === current.filename) {
