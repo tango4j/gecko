@@ -637,3 +637,20 @@ export const deleteSpeaker = (context, speaker) => {
     changed(context, null)
     return true
 }
+
+// Fold every undo entry pushed since `fromLength` into a single undo step
+// (used when a group of selected boxes is dragged together).
+export const foldUndo = (context, fromLength) => {
+    const hs = context.historyService
+    const entries = hs.undoStack.splice(fromLength)
+    if (entries.length <= 1) {
+        hs.undoStack.push(...entries)
+        return
+    }
+    pushUndo(context, () => {
+        entries.slice().reverse().forEach(entry => {
+            hs.undoStack.push(entry)
+            hs.undo(context)
+        })
+    })
+}

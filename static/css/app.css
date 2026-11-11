@@ -1302,3 +1302,65 @@ body.gk-resizing * {
     background: color-mix(in srgb, var(--base) 22%, transparent);
     border-top: 3px solid color-mix(in srgb, var(--base) 75%, transparent);
 }
+
+/* ---------- Label column: speaker names never cover the timeline ---------- */
+:root {
+    --gk-gutter: 64px;
+}
+
+/* waveform, timeline and spectrogram start after the label column, so time
+   0 lines up with the first visible pixel of every lane */
+#waveform,
+#timeline,
+#wavespectrogram {
+    margin-left: var(--gk-gutter);
+}
+
+.gk-lane-clip {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--gk-gutter);
+    right: 0;
+    overflow: hidden;
+}
+
+.gk-lane-label {
+    width: var(--gk-gutter);
+    box-sizing: border-box;
+    padding: 0 6px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: linear-gradient(to right, color-mix(in srgb, var(--lane) 55%, #0b0d10), color-mix(in srgb, var(--lane) 40%, #0b0d10));
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 4px 0 8px -1px rgba(0, 0, 0, 0.75), 1px 0 0 rgba(0, 0, 0, 0.6);
+    z-index: 6;
+}
+
+.gk-lane-label.row-selected {
+    color: #111;
+    background: #ffffff;
+}
+
+/* ---------- Selected boxes: deeper shadow, glossy surface, brighter glow ---------- */
+.gk-word.selected,
+.gk-seg.selected {
+    z-index: 3;
+    outline: 2px solid #ffffff;
+    outline-offset: 0;
+    background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.18) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.08) 100%),
+        color-mix(in srgb, var(--base) 70%, transparent);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--base) 55%, transparent),
+        0 0 14px 4px var(--glow),
+        0 0 28px 6px color-mix(in srgb, var(--base) 35%, transparent),
+        0 6px 14px rgba(0, 0, 0, 0.65),
+        0 12px 24px rgba(0, 0, 0, 0.45);
+    transform: translateY(-1px);
+}
+
+.gk-word.selected > span {
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}

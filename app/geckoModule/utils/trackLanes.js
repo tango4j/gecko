@@ -1,7 +1,7 @@
 import { getTracks, markTracksDirty } from './speakerTracks.js'
 import { OPERATION_IDS } from '../constants'
 import { shadeVars } from './palette.js'
-import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker, deleteSelection, selectionItems, sameItem } from './laneEdits.js'
+import { fitRegionToWords, insertAtCursor, setWordText, moveWordToSpeaker, moveSegmentToSpeaker, currentLaneSpeaker, deleteSelection, selectionItems, sameItem, foldUndo } from './laneEdits.js'
 
 // Two lane displays under the waveform, one row per speaker:
 //   #gecko-word-track : a box per word (start..end), text clipped to the box;
@@ -19,6 +19,9 @@ export const MAX_LANE_H = 120
 
 const MIN_DUR = 0.02
 export const DEFAULT_SNAP_PX = 6
+// left column holding the speaker labels; the waveform and timeline get the
+// same left margin (CSS --gk-gutter) so all views stay aligned
+export const GUTTER_PX = 64
 const HANDLE_PX = 6
 const TEXT_MIN_PX = 12          // narrower word boxes hide their text entirely
 const MIN_FONT_PX = 5           // lanes so thin the text would be under this hide it
@@ -105,7 +108,7 @@ export const renderTrackLanes = (context, force = false) => {
     const wordH = wordLaneHeight(context)
     const diarH = diarLaneHeight(context)
 
-    const bodyLeft = word.getBoundingClientRect().left
+    const bodyLeft = word.getBoundingClientRect().left + GUTTER_PX
     const shift = g.wrapperLeft - bodyLeft - g.scrollLeft
     const key = [context.tracksVersion, g.pps.toFixed(4), g.scrollLeft, g.viewWidth, Math.round(shift), wordH, diarH].join('|')
     if (!force && key === context.trackRenderKey) return
@@ -142,9 +145,9 @@ export const renderTrackLanes = (context, force = false) => {
     const rowSelItem = selectionItems(context).find(s => s.kind === 'speaker')
     const rowSel = rowSelItem ? rowSelItem.speaker : null
     word.innerHTML = laneScaffold(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
-        `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
-        laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel) +
-        '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'
+        `<div class="gk-lane-clip"><div class="gk-lane-content" style="transform:translateX(${shift}px)">${boxes}</div>` +
+        '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div></div>' +
+        laneLabels(tracks.speakers, tracks.colors, wordH, selected, rowSel)
 
     // ---- RTTM / diarization lane ----
     const visibleSegs = []
@@ -163,9 +166,9 @@ export const renderTrackLanes = (context, force = false) => {
     diar.classList.toggle('editable', !!tracks.diarEditable)
     diar.style.height = `${Math.max(tracks.speakers.length, 1) * diarH}px`
     diar.innerHTML = laneScaffold(tracks.speakers, tracks.colors, diarH, selected, rowSel) +
-        `<div class="gk-lane-content" style="transform:translateX(${shift}px)">${segs}</div>` +
-        laneLabels(tracks.speakers, tracks.colors, diarH, selected, rowSel) +
-        '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div>'
+        `<div class="gk-lane-clip"><div class="gk-lane-content" style="transform:translateX(${shift}px)">${segs}</div>` +
+        '<div class="gk-track-cursor"></div><div class="gk-drag-label" hidden></div></div>' +
+        laneLabels(tracks.speakers, tracks.colors, diarH, selected, rowSel)
 
     const wordTitle = document.querySelector('#gecko-word-track .gecko-track-source')
     const diarTitle = document.querySelector('#gecko-diar-track .gecko-track-source')
@@ -231,8 +234,8 @@ const fileLimits = (context) => ({ lo: 0, hi: context.wavesurfer.getDuration() }
 const wordAdapter = (context, entry) => ({
     label: entry.w.text,
     // edges of this speaker's other word boxes (snap targets)
-    edgesFor: (speaker) => (getTracks(context).wordsBySpeaker[speaker] || [])
-        .filter(x => x.w !== entry.w).flatMap(x => [x.w.start, x.w.end]),
+    edgesFor: (speaker, skip) => (getTracks(context).wordsBySpeaker[speaker] || [])
+        .filter(x => x.w !== entry.w && !(skip && skip({ kind: 'word', w: x.w }))).flatMap(x => [x.w.start, x.w.end]),
     speaker: entry.speaker,
     modes: ['start', 'end', 'move'],
     get: () => ({ start: entry.w.start, end: entry.w.end }),
@@ -253,8 +256,9 @@ const wordAdapter = (context, entry) => ({
 const segAdapter = (context, seg) => ({
     label: seg.speaker,
     // edges of this speaker's other RTTM boxes (snap targets)
-    edgesFor: (speaker) => (getTracks(context).diarBySpeaker[speaker] || [])
+    edgesFor: (speaker, skip) => (getTracks(context).diarBySpeaker[speaker] || [])
         .filter(x => !((seg.region && x.region && x.region.id === seg.region.id) || (seg.ref && x.ref === seg.ref)))
+        .filter(x => !(skip && skip(x.region ? { kind: 'seg', regionId: x.region.id } : { kind: 'seg', ref: x.ref })))
         .flatMap(x => [x.start, x.end]),
     speaker: seg.speaker,
     modes: ['start', 'end', 'move'],
@@ -280,7 +284,7 @@ const segAdapter = (context, seg) => ({
 const timeAtClientX = (context, clientX, body) => {
     const g = geometry(context)
     if (!g) return null
-    const x = clientX - body.getBoundingClientRect().left - context.trackShift
+    const x = clientX - body.getBoundingClientRect().left - GUTTER_PX - context.trackShift
     return Math.min(Math.max(x / g.pps, 0), g.duration)
 }
 
@@ -306,14 +310,63 @@ const edgeMode = (box, clientX, modes) => {
     return modes.includes('move') ? 'move' : null
 }
 
+// The other selected boxes that move along when one selected box is dragged
+// by its body: each gets its own adapter, start times, row and DOM box.
+const buildGroup = (context, grabbedItem) => {
+    const items = selectionItems(context).filter(i => i.kind !== 'speaker' && !sameItem(i, grabbedItem))
+    if (!items.length || !selectionItems(context).some(i => sameItem(i, grabbedItem))) return null
+    const tracks = getTracks(context)
+    const { word, diar } = els()
+    const members = []
+    items.forEach(item => {
+        let adapter = null
+        let box = null
+        let body = null
+        let laneH = 0
+        if (item.kind === 'word') {
+            const entry = tracks.words.find(x => x.w === item.w)
+            if (!entry) return
+            adapter = wordAdapter(context, entry)
+            const k = context.laneWords.indexOf(entry)
+            box = k >= 0 ? word.querySelector(`.gk-word[data-k="${k}"]`) : null
+            body = word
+            laneH = wordLaneHeight(context)
+        } else if (tracks.diarEditable) {
+            const seg = tracks.diar.find(x => (item.regionId && x.region && x.region.id === item.regionId) || (item.ref && x.ref === item.ref))
+            if (!seg) return
+            adapter = segAdapter(context, seg)
+            const k = context.laneSegs.indexOf(seg)
+            box = k >= 0 ? diar.querySelector(`.gk-seg[data-k="${k}"]`) : null
+            body = diar
+            laneH = diarLaneHeight(context)
+        }
+        if (!adapter) return
+        const { start, end } = adapter.get()
+        members.push({ adapter, box, body, laneH, start0: start, end0: end, idx0: tracks.speakers.indexOf(adapter.speaker), speaker: adapter.speaker })
+        if (box) box.classList.add('dragging')
+    })
+    return members.length ? members : null
+}
+
 const startDrag = (context, e, body, box, adapter, laneH) => {
     const mode = edgeMode(box, e.clientX, adapter.modes)
     const g = geometry(context)
     const { start, end } = adapter.get()
+    const group = mode === 'move' ? buildGroup(context, adapter.selection()) : null
+    const speakers = getTracks(context).speakers
+    const idx0 = speakers.indexOf(adapter.speaker)
+    const all = [{ start0: start, end0: end, idx0 }, ...(group || [])]
     context.trackDrag = {
         adapter, box, mode, body, laneH, pps: g.pps, x0: e.clientX, y0: e.clientY, moved: false,
         start0: start, end0: end, speaker: adapter.speaker, shownSpeaker: adapter.speaker, shift: e.shiftKey, ...adapter.limits(),
-        label: body.querySelector('.gk-drag-label')
+        label: body.querySelector('.gk-drag-label'),
+        group, idx0,
+        // the whole group must stay inside the file and inside the speaker rows
+        shiftLo: Math.max(...all.map(m => -m.start0)),
+        shiftHi: Math.min(...all.map(m => g.duration - m.end0)),
+        laneLo: Math.max(...all.map(m => -m.idx0)),
+        laneHi: Math.min(...all.map(m => speakers.length - 1 - m.idx0)),
+        skip: group ? (item) => group.some(m => sameItem(m.adapter.selection(), item)) : null
     }
     box.classList.add('dragging')
 }
@@ -471,10 +524,12 @@ export const initTrackLanes = (context) => {
             const len = d.end0 - d.start0
             s = Math.min(Math.max(d.start0 + dt, d.lo), d.hi - len)
             en = s + len
-            // vertical: drop onto another speaker's row
+            // vertical: drop onto another speaker's row (a group keeps its spacing)
             const speakers = getTracks(context).speakers
-            d.speaker = laneAtClientY(context, d.body, e.clientY, d.laneH)
-            const i = speakers.indexOf(d.speaker)
+            const want = speakers.indexOf(laneAtClientY(context, d.body, e.clientY, d.laneH))
+            d.laneDelta = Math.min(Math.max(want - d.idx0, d.laneLo), d.laneHi)
+            d.speaker = speakers[d.idx0 + d.laneDelta]
+            const i = d.idx0 + d.laneDelta
             const pad = d.laneH >= 12 ? 2 : 1
             d.box.style.top = `${i * d.laneH + pad}px`
             if (d.speaker !== d.shownSpeaker) {
@@ -490,7 +545,7 @@ export const initTrackLanes = (context) => {
         if (snap) {
             const spk = d.speaker || d.adapter.speaker
             d.edgeCache = d.edgeCache || {}
-            if (!d.edgeCache[spk]) d.edgeCache[spk] = d.adapter.edgesFor(spk)
+            if (!d.edgeCache[spk]) d.edgeCache[spk] = d.adapter.edgesFor(spk, d.skip)
             const cursorT = context.wavesurfer.getCurrentTime()
             const nearest = (v) => {
                 let best = { t: cursorT, what: 'cursor', dist: Math.abs(v - cursorT) }
@@ -519,13 +574,39 @@ export const initTrackLanes = (context) => {
                 }
             }
         }
+        if (d.group) {
+            // keep the whole group inside the file, then move every member by
+            // the same time shift and the same number of rows
+            const shift = Math.min(Math.max(s - d.start0, d.shiftLo), d.shiftHi)
+            s = d.start0 + shift
+            en = d.end0 + shift
+            const speakers = getTracks(context).speakers
+            const colors = getTracks(context).colors
+            d.group.forEach(m => {
+                const ms = m.start0 + shift
+                const me = m.end0 + shift
+                m.adapter.set(ms, me)
+                m.speaker = speakers[m.idx0 + (d.laneDelta || 0)]
+                if (m.box) {
+                    m.box.style.left = `${ms * d.pps}px`
+                    m.box.style.width = `${Math.max((me - ms) * d.pps, 1)}px`
+                    const pad = m.laneH >= 12 ? 2 : 1
+                    m.box.style.top = `${speakers.indexOf(m.speaker) * m.laneH + pad}px`
+                    if (m.speaker !== m.shownSpeaker) {
+                        m.shownSpeaker = m.speaker
+                        m.box.classList.toggle('to-other-speaker', m.speaker !== m.adapter.speaker)
+                        m.box.style.cssText += shadeVars(colors[m.speaker])
+                    }
+                }
+            })
+        }
         d.box.classList.toggle('snapped', !!snapped)
         d.adapter.set(s, en)
         d.box.style.left = `${s * d.pps}px`
         d.box.style.width = `${Math.max((en - s) * d.pps, 1)}px`
         if (d.label) {
             d.label.hidden = false
-            const who = d.speaker !== d.adapter.speaker ? `→ ${d.speaker}  ` : ''
+            const who = (d.group ? `${d.group.length + 1} boxes  ` : '') + (d.speaker !== d.adapter.speaker ? `→ ${d.speaker}  ` : '')
             d.label.textContent = `${who}${d.adapter.label}  ${fmt(s)} – ${fmt(en)} s${snapped ? `  ⇥ ${snapped}` : ''}`
             d.label.style.left = `${en * d.pps + context.trackShift + 4}px`
             d.label.style.top = d.box.style.top
@@ -537,11 +618,24 @@ export const initTrackLanes = (context) => {
         if (!d) return
         context.trackDrag = null
         d.box.classList.remove('dragging', 'snapped')
+        if (d.group) d.group.forEach(m => m.box && m.box.classList.remove('dragging', 'to-other-speaker'))
         if (d.label) d.label.hidden = true
         const now = d.adapter.get()
         const timeChanged = Math.abs(now.start - d.start0) > 1e-9 || Math.abs(now.end - d.end0) > 1e-9
         const speakerChanged = d.speaker && d.speaker !== d.adapter.speaker
-        if (d.moved && d.mode) {
+        if (d.moved && d.mode && d.group) {
+            // one undo step for the whole group
+            const before = context.historyService.undoStack.length
+            const commitOne = (adapter, speaker, s0, e0) => {
+                const t = adapter.get()
+                if (speaker !== adapter.speaker) adapter.moveTo(speaker, s0, e0)
+                else if (Math.abs(t.start - s0) > 1e-9 || Math.abs(t.end - e0) > 1e-9) adapter.commit(s0, e0)
+            }
+            commitOne(d.adapter, d.speaker || d.adapter.speaker, d.start0, d.end0)
+            d.group.forEach(m => commitOne(m.adapter, m.speaker, m.start0, m.end0))
+            foldUndo(context, before)
+            if (speakerChanged) context.laneSpeaker = d.speaker
+        } else if (d.moved && d.mode) {
             if (speakerChanged) {
                 d.adapter.moveTo(d.speaker, d.start0, d.end0)
                 context.laneSpeaker = d.speaker
