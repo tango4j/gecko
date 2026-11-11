@@ -1,5 +1,6 @@
 import { attachVideo, isVideoFile } from './videoSubtitles.js'
 import { formatName } from './formatNames.js'
+import { reconcileSpeakerNames } from './speakerNames.js'
 
 import { getCurrentTimeStamp, formatTime } from './index.js'
 
@@ -83,6 +84,7 @@ export const parseServerResponse = (context, serverConfig, res) => {
         res.segmentFiles.forEach((x) => {
             parseFileData(context, x.filename, x.data, x.s3Subfolder)
         })
+        finishTextFiles(context)
     } else {
         addEmptyFile(context)
     }
@@ -97,15 +99,25 @@ const notifyFormat = (context, file) => {
     if (info && info.unit === 'utterance') {
         body += ` — speaker labels (${info.speakers.join(', ')}) with transcription; ${info.silence.length} silence intervals`
     } else if (info && info.format === 'CTM' && info.layout === 'channel') {
-        body += ` — channel numbers used as speakers (${info.speakers.join(', ')})`
+        const chans = info.channels || []
+        body += ` — channels ${chans.join(', ')} used as speakers (${info.speakers.join(', ')})`
     } else if (info && info.format === 'CTM' && info.layout === 'field') {
         body += ` — speaker column (${info.speakers.join(', ')})`
     } else if (info && info.unit === 'activity') {
         body += ` — speaker activity (${info.speakers.join(', ')})`
     }
+    if (info && info.renamedTo) {
+        body += `; speaker names matched to ${info.renamedTo.ref}`
+    }
     context.formatNotices = (context.formatNotices || []).concat(`${name} loaded: ${body}`)
     context.toaster.pop({ type: 'info', title: `${name} loaded`, body, timeout: 8000 })
     if (context.$scope) context.$scope.$evalAsync()
+}
+
+// After every file is parsed: one set of speaker names, then the toasts.
+const finishTextFiles = (context) => {
+    reconcileSpeakerNames(context.filesData)
+    context.filesData.forEach(file => notifyFormat(context, file))
 }
 
 const parseFileData = (context, fileName, fileData, fileS3Subfolder = null) => {
@@ -118,7 +130,6 @@ const parseFileData = (context, fileName, fileData, fileS3Subfolder = null) => {
     // what the loader found (TextGrid: utterance boxes + silence spans, ...)
     file.formatInfo = context.lastParseInfo || null
     context.lastParseInfo = null
-    notifyFormat(context, file)
     if (fileS3Subfolder) {
         file.s3Subfolder = fileS3Subfolder
     }
@@ -146,6 +157,7 @@ export const parseAndLoadText = async (context, res) => {
                 parseFileData(context, r.name, r.data)
             }
         })
+        finishTextFiles(context)
         resolve()
     })
 }

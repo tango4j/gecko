@@ -5,7 +5,8 @@ import * as constants from '../constants'
 //            speaker and segment id come from the first column
 //   channel  "<recording> <chan> <start> <dur> <word> [conf]"
 //            one recording id for the whole file (or several channels):
-//            the channel number is the speaker index (channel 3 -> spk3)
+//            channels count from 1 (NIST), so channel 3 is speaker index 2
+//            -> spk2; a file that uses channel 0 counts from 0
 //   field    "<recording> <chan> <start> <dur> <word> <conf> <type> <speaker>"
 //            NIST CTM with a speaker column
 //   recording  anything else: the first column (up to "_") is the speaker
@@ -25,7 +26,6 @@ export const detectLayout = (rows) => {
     return 'recording'
 }
 
-const channelSpeaker = (chan) => /^\d+$/.test(chan) ? `spk${parseInt(chan, 10)}` : `spk${chan}`
 
 export const parse = (data, $parent) => {
     let monologues = [];
@@ -37,6 +37,10 @@ export const parse = (data, $parent) => {
         .filter(cells => cells && cells.length >= 5)
     const layout = detectLayout(rows)
     const hasConfidence = rows.some(c => c.length >= 6)
+    const channels = [...new Set(rows.map(c => c[1]))]
+        .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+    const channelBase = channels.every(c => /^\d+$/.test(c)) && !channels.some(c => parseInt(c, 10) === 0) ? 1 : 0
+    const channelSpeaker = (chan) => /^\d+$/.test(chan) ? `spk${parseInt(chan, 10) - channelBase}` : `spk${chan}`
 
     let words = rows.map((cells) => {
         let start = parseFloat(cells[2]);
@@ -89,8 +93,11 @@ export const parse = (data, $parent) => {
             unit: 'word',
             layout,
             hasConfidence,
+            channels,
+            channelBase,
             recording: recordings[0] || 'audio',
             speakers: [...new Set(words.map(w => w.speaker.id))]
+                .sort((x, y) => String(x).localeCompare(String(y), undefined, { numeric: true }))
         }
     }
 
@@ -142,7 +149,8 @@ const convertPlain = (app, fileIndex, info) => {
     const speakerChannel = (spk) => {
         if (chanOf[spk] !== undefined) return chanOf[spk]
         const m = /(\d+)$/.exec(spk)
-        let ch = m ? parseInt(m[1], 10) : 1
+        const base = info.channelBase === undefined ? 1 : info.channelBase
+        let ch = m ? parseInt(m[1], 10) + base : base
         while (used.has(ch)) ch++
         used.add(ch)
         chanOf[spk] = ch
