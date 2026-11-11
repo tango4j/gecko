@@ -96,6 +96,10 @@ const notifyFormat = (context, file) => {
     let body = file.filename
     if (info && info.unit === 'utterance') {
         body += ` — speaker labels (${info.speakers.join(', ')}) with transcription; ${info.silence.length} silence intervals`
+    } else if (info && info.format === 'CTM' && info.layout === 'channel') {
+        body += ` — channel numbers used as speakers (${info.speakers.join(', ')})`
+    } else if (info && info.format === 'CTM' && info.layout === 'field') {
+        body += ` — speaker column (${info.speakers.join(', ')})`
     } else if (info && info.unit === 'activity') {
         body += ` — speaker activity (${info.speakers.join(', ')})`
     }
