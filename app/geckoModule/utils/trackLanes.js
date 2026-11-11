@@ -230,6 +230,9 @@ const fileLimits = (context) => ({ lo: 0, hi: context.wavesurfer.getDuration() }
 
 const wordAdapter = (context, entry) => ({
     label: entry.w.text,
+    // edges of this speaker's other word boxes (snap targets)
+    edgesFor: (speaker) => (getTracks(context).wordsBySpeaker[speaker] || [])
+        .filter(x => x.w !== entry.w).flatMap(x => [x.w.start, x.w.end]),
     speaker: entry.speaker,
     modes: ['start', 'end', 'move'],
     get: () => ({ start: entry.w.start, end: entry.w.end }),
@@ -249,6 +252,10 @@ const wordAdapter = (context, entry) => ({
 
 const segAdapter = (context, seg) => ({
     label: seg.speaker,
+    // edges of this speaker's other RTTM boxes (snap targets)
+    edgesFor: (speaker) => (getTracks(context).diarBySpeaker[speaker] || [])
+        .filter(x => !((seg.region && x.region && x.region.id === seg.region.id) || (seg.ref && x.ref === seg.ref)))
+        .flatMap(x => [x.start, x.end]),
     speaker: seg.speaker,
     modes: ['start', 'end', 'move'],
     get: () => ({ start: seg.start, end: seg.end }),
@@ -476,34 +483,50 @@ export const initTrackLanes = (context) => {
                 d.box.style.cssText += shadeVars(getTracks(context).colors[d.speaker])
             }
         }
-        // snap the dragged edge(s) to the cursor when within the snap distance
-        let snapped = false
+        // snap the dragged edge(s) to the cursor or to the edges of the
+        // speaker's preceding / following boxes, whichever is closest
+        let snapped = null
         const snap = snapSeconds(context, d.pps)
         if (snap) {
-            const c = context.wavesurfer.getCurrentTime()
+            const spk = d.speaker || d.adapter.speaker
+            d.edgeCache = d.edgeCache || {}
+            if (!d.edgeCache[spk]) d.edgeCache[spk] = d.adapter.edgesFor(spk)
+            const cursorT = context.wavesurfer.getCurrentTime()
+            const nearest = (v) => {
+                let best = { t: cursorT, what: 'cursor', dist: Math.abs(v - cursorT) }
+                for (const t of d.edgeCache[spk]) {
+                    const dist = Math.abs(v - t)
+                    if (dist < best.dist) best = { t, what: 'segment edge', dist }
+                }
+                return best.dist <= snap ? best : null
+            }
             if (d.mode === 'start') {
-                if (Math.abs(s - c) <= snap && c < en - MIN_DUR) { s = c; snapped = true }
+                const n = nearest(s)
+                if (n && n.t < en - MIN_DUR) { s = n.t; snapped = n.what }
             } else if (d.mode === 'end') {
-                if (Math.abs(en - c) <= snap && c > s + MIN_DUR) { en = c; snapped = true }
+                const n = nearest(en)
+                if (n && n.t > s + MIN_DUR) { en = n.t; snapped = n.what }
             } else {
-                const ds = c - s
-                const de = c - en
-                const shift = Math.abs(ds) <= Math.abs(de) ? ds : de
-                if (Math.abs(shift) <= snap && s + shift >= d.lo && en + shift <= d.hi) {
-                    s += shift
-                    en += shift
-                    snapped = true
+                const ns = nearest(s)
+                const ne = nearest(en)
+                const pick = !ns ? (ne && { shift: ne.t - en, what: ne.what })
+                    : !ne ? { shift: ns.t - s, what: ns.what }
+                        : (ns.dist <= ne.dist ? { shift: ns.t - s, what: ns.what } : { shift: ne.t - en, what: ne.what })
+                if (pick && s + pick.shift >= d.lo && en + pick.shift <= d.hi) {
+                    s += pick.shift
+                    en += pick.shift
+                    snapped = pick.what
                 }
             }
         }
-        d.box.classList.toggle('snapped', snapped)
+        d.box.classList.toggle('snapped', !!snapped)
         d.adapter.set(s, en)
         d.box.style.left = `${s * d.pps}px`
         d.box.style.width = `${Math.max((en - s) * d.pps, 1)}px`
         if (d.label) {
             d.label.hidden = false
             const who = d.speaker !== d.adapter.speaker ? `→ ${d.speaker}  ` : ''
-            d.label.textContent = `${who}${d.adapter.label}  ${fmt(s)} – ${fmt(en)} s${snapped ? '  ⇥ cursor' : ''}`
+            d.label.textContent = `${who}${d.adapter.label}  ${fmt(s)} – ${fmt(en)} s${snapped ? `  ⇥ ${snapped}` : ''}`
             d.label.style.left = `${en * d.pps + context.trackShift + 4}px`
             d.label.style.top = d.box.style.top
         }
