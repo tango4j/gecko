@@ -85,7 +85,9 @@ export const setLaneSelection = (context, selection) => {
 // Shift+click: add the item, or remove it if already selected. A whole
 // speaker selection is replaced rather than mixed with boxes.
 const toggleLaneSelection = (context, item) => {
-    const current = selectionItems(context).filter(s => s.kind !== 'speaker')
+    // word boxes and RTTM boxes are never selected together: Shift+clicking
+    // the other kind starts a new selection with just that box
+    const current = selectionItems(context).filter(s => s.kind === item.kind)
     const i = current.findIndex(s => sameItem(s, item))
     if (i >= 0) current.splice(i, 1)
     else current.push(item)

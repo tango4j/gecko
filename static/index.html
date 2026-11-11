@@ -246,9 +246,11 @@
                 Pause
             </button>
 
-            <button class="btn btn-primary" ng-click="ctrl.playRegion()" ng-dblclick="ctrl.playRegionFromCurrentTime()">
-                <i class="glyphicon glyphicon-play"></i>
-                Play Segment
+            <button class="btn btn-primary" ng-click="ctrl.playRegion()" ng-dblclick="ctrl.playRegionFromCurrentTime()"
+                    ng-class="{ 'gk-looping': ctrl.selectionLoop }"
+                    title="Play the selected boxes in a loop (overlaps play straight through); click again to stop">
+                <i class="glyphicon" ng-class="ctrl.selectionLoop ? 'glyphicon-stop' : 'glyphicon-play'"></i>
+                {{ ctrl.selectionLoop ? 'Stop Segment' : 'Play Segment' }}
             </button>
 
             <button class="btn btn-default" ng-click="ctrl.zoomIntoRegion()"

@@ -14,7 +14,10 @@ export default (parent) => {
     if (parent.videoPlayer) {
         const wavesurferTime = parent.wavesurfer.getCurrentTime()
         parent.videoPlayer.currentTime(wavesurferTime)
-        parent.videoPlayer.play()
+        // a seek while playing pauses + resumes; the muted video's pending
+        // play() is then interrupted, which is harmless
+        const p = parent.videoPlayer.play()
+        if (p && p.catch) p.catch(() => {})
     }
 
     parent.isPlaying = true

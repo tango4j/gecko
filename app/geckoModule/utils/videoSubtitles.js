@@ -4,6 +4,7 @@ import { getTracks } from './speakerTracks.js'
 import { subtitleVars } from './palette.js'
 import { initTrackLanes, renderTrackLanes, updateTrackCursors } from './trackLanes.js'
 import { updateWaveOverlay } from './waveOverlay.js'
+import { tickSelectionLoop } from './selectionPlayback.js'
 
 // Video stage + per-speaker subtitle overlay + the frame loop that also drives
 // the word / RTTM lanes.
@@ -84,6 +85,7 @@ export const startMediaLoop = (context) => {
         initTrackLanes(context)
         renderTrackLanes(context)
         updateTrackCursors(context, time)
+        tickSelectionLoop(context, time)
         updateWaveOverlay(context, time)
         if (context.videoMode) renderSubtitles(context, time)
     }

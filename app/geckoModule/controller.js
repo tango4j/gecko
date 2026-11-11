@@ -4,6 +4,7 @@ import { attachVideo, renderSubtitles } from './utils/videoSubtitles.js'
 import { markTracksDirty } from './utils/speakerTracks.js'
 import { insertAndEdit } from './utils/trackLanes.js'
 import { deleteSelection, addSpeaker, splitSelection, splittableItems } from './utils/laneEdits.js'
+import { toggleSelectionLoop } from './utils/selectionPlayback.js'
 import { readVideoFile } from './utils/fileUtils.js'
 
 import * as constants from './constants'
@@ -1618,7 +1619,11 @@ class MainController {
                     return;
                 }
     
-                if (this.selectedRegion) {
+                if (this.laneSelection) {
+                    // boxes selected in the lanes: loop over them (again = stop)
+                    toggleSelectionLoop(this)
+                }
+                else if (this.selectedRegion) {
                     this.selectedRegion.play()
                 }
                 // play silence region
