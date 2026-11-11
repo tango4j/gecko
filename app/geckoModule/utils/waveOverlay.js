@@ -59,8 +59,13 @@ const selectedSpans = (context, tracks) => {
         } else if (item.kind === 'seg') {
             const seg = tracks.diar.find(x => (item.regionId && x.region && x.region.id === item.regionId) || (item.ref && x.ref === item.ref))
             if (seg) {
+                // while dragging, the bounds being dragged live on the track
+                // entry (the region is only updated on release), so follow
+                // those: the waveform box moves with the bar, frame by frame
+                const dragging = !!(context.trackDrag || context.waveDrag)
                 const live = item.regionId ? context.getRegion(item.regionId) : item.ref
-                out.push([live ? live.start : seg.start, live ? live.end : seg.end, seg.speaker, tracks.diarEditable ? item : null])
+                const src = dragging || !live ? seg : live
+                out.push([src.start, src.end, seg.speaker, tracks.diarEditable ? item : null])
             }
         } else if (item.kind === 'speaker') {
             const segs = tracks.showDiar ? tracks.diarBySpeaker[item.speaker] : tracks.turnsBySpeaker[item.speaker]
@@ -87,6 +92,25 @@ export const updateWaveOverlay = (context, time) => {
     if (key === context.waveOverlayKey) return
     context.waveOverlayKey = key
 
+    // Same boxes as last frame (only times moved, e.g. while dragging):
+    // update them in place, so the handle under the cursor is never
+    // replaced and nothing flickers. Rebuild only when the set changes.
+    const all = play.map(x => ['gk-wave-play', x]).concat(sel.map(x => ['gk-wave-sel', x]))
+    const shape = all.map(([cls, x]) => `${cls}:${x[2]}:${x[3] ? 'h' : ''}`).join(';')
+    const handleItems = sel.filter(x => x[3]).map(x => x[3])
+    const prevItems = context.waveSelItems || []
+    const same = shape === context.waveOverlayShape && layer.children.length === all.length &&
+        handleItems.length === prevItems.length && handleItems.every((it, i) => it === prevItems[i])
+    const place = (el, [start, end]) => {
+        el.style.left = `${start * pps}px`
+        el.style.width = `${Math.max((end - start) * pps, 1)}px`
+    }
+    if (same) {
+        all.forEach(([, x], i) => place(layer.children[i], x))
+        return
+    }
+    context.waveOverlayShape = shape
+
     context.waveSelItems = []
     const box = (cls, [start, end, speaker, item]) => {
         const s = speakerShades(tracks.colors[speaker] || '#7f858d')
@@ -100,5 +124,5 @@ export const updateWaveOverlay = (context, time) => {
         }
         return `<div class="${cls}" data-speaker="${esc(speaker)}" style="left:${left}px;width:${width}px;--base:${s.base};--glow:${s.glow}">${handles}</div>`
     }
-    layer.innerHTML = play.map(x => box('gk-wave-play', x)).join('') + sel.map(x => box('gk-wave-sel', x)).join('')
+    layer.innerHTML = all.map(([cls, x]) => box(cls, x)).join('')
 }
